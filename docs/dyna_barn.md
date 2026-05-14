@@ -295,14 +295,8 @@ explicitly evaluate on the public 60-world subset are **Dyna-LfLH** (2024) and
 
 ### LfH-CP (Hallucinating Critical Points, 2025) — [arXiv 2509.26513](https://arxiv.org/abs/2509.26513)
 
-- **Idea**: factorises hallucination into (a) finding "critical points" — where/when
-  obstacles must appear to make an existing motion plan optimal — and (b)
-  procedurally generating diverse trajectories through those points. Avoids the mode
-  collapse that hurts Dyna-LfLH.
-- **Architecture**: causal Transformer (2 encoder layers, 2 heads, 256-d FF) over
-  five past LiDAR scans + five past actions; predicts five future actions. LiDAR
-  encoded by a 2-layer 1D CNN (kernel 5) to a 256-d embedding.
-- **Eval protocol**: 60 envs × 2 trials = **120 trials**.
+**Headline numbers**
+
 - **Reported number**: **30.83% overall success rate** vs. Dyna-LfLH's 22.5%.
   Verbatim from paper §IV-D:
   > "LfH-CP achieves a higher success rate at 30.83% [over 60 envs × 2 trials =
@@ -312,8 +306,98 @@ explicitly evaluate on the public 60-world subset are **Dyna-LfLH** (2024) and
 - **Verified 2026-05-14**: both numbers are **overall averages across all 60
   worlds (easy + medium + hard combined)**, not hard-bin-only. Paper does not
   publish a per-difficulty breakdown.
-- **Caveat**: direct comparison to the DynaBARN-paper TD3 number (which is
-  *per-difficulty*, *in-distribution*) is not apples-to-apples.
+- **Eval protocol**: 60 envs × 2 trials = **120 trials**.
+
+**Core idea — "critical points"**
+
+Most obstacles in a scene don't matter most of the time; only the ones *close
+to the robot's path right when the robot is there* actually shape the motion
+plan. Call those obstacle configurations "critical points." Two-stage method:
+
+1. **Learn what critical points are.** Given an expert motion plan `p`, train
+   a hallucination function `h_ψ` that outputs a small set of obstacle
+   configs + times — `K = {C_obst^t | t ∈ T}` — such that a classical
+   planner re-applied to those obstacles produces the same plan `p`. This
+   isolates the obstacles that *had to* be there.
+2. **Hallucinate full trajectories through them.** For each critical point,
+   draw a straight-line constant-velocity obstacle trajectory that passes
+   through that point at that time:
+   `trajectory_i(t) = S_i + V_i · t,  ‖V_i‖ ∼ U[1, 2] m/s`,
+   direction random. Sample many such hallucinations per plan to get a rich
+   training set without expensive trial-and-error data collection.
+
+**Training pipeline** (paper §III)
+
+- **Source data**: robot odometry recordings, segmented by a sliding window
+  of 233 timesteps (~5 s) into individual "plans" `p = (x^t, y^t, ψ^t, v^t,
+  ω^t)`. Source environment not specified in the excerpt but
+  typically a teleop pass through an open space.
+- **Critical-point filtering** (greedy): add obstacles one at a time; keep
+  if reconstruction loss drops by ≥ 1%. Cap `N_max = 7`. Stop when overall
+  loss reduction ≥ 90%.
+- **Per-plan augmentation**: `S_1 = 1` critical config sampled per filtered
+  obstacle from `h_ψ*`; `S_2 = 50` trajectories generated per critical-config
+  set → up to `50 × 7 = 350` trajectory sequences per source plan. Plus
+  up to 20 random non-colliding extra obstacles. Plus obstacle-free plans
+  with speed > 0.9 m/s.
+- **Rendering**: each sample → 2D LiDAR scan of the obstacle config at that
+  timestep, paired with `(v, w)` ground truth.
+
+**Hallucination-function training**
+
+- Phase 1 (spatial only): MSE reconstruction loss, 1000 epochs.
+- Phase 2 (add temporal mask via Gumbel-Softmax): 1500 epochs, temperature
+  τ decayed 2048 → 0.1 over the first 1000, then 500 with one-hot masks.
+- Stabilisation: a Gaussian prior fit to `p` constrains obstacle centres;
+  penalties for obstacle-obstacle and obstacle-plan overlap.
+
+**Policy architecture**
+
+```
+M_l = 5 past LiDAR scans (720-d each)
+       ↓ 1D-CNN, 2 layers, kernel 5
+       → 256-d per-scan embedding
+M_l = 5 past actions concatenated
+       ↓
+Causal Transformer:
+  - 2 encoder layers
+  - 2 attention heads
+  - 256-d feed-forward
+       ↓ concat with goal vector (unit dir 2.25 m ahead along global path)
+       ↓ 2-layer MLP head
+M_a = 5 future actions (v, w each); execute only the first per step.
+```
+
+**Training the policy**
+
+- Plain **behavior cloning** (MSE), no RL.
+- Loss: `θ* = argmin_θ E[ℓ(p, f_θ(obstacle-configs | c_c, c_g))]`.
+
+**Inference / deployment**
+
+- Robot pose set to `c_c = 0` (obs is in robot frame).
+- Goal `c_g` = unit vector 2.25 m ahead along a `move_base`-planned global
+  path through the static map.
+- **MPC safety module on top**: if collision imminent, halt then reverse.
+  (Same hybrid pattern as LiCS at the 3rd BARN Challenge.)
+- Runs as a ROS node in Gazebo for the published numbers.
+
+**Why our PPO baseline beats it on overall**
+
+| Axis | LfH-CP (BC + hallucination) | Ours (PPO procedural) |
+|---|---|---|
+| Learning | Behavior cloning (offline, hallucinated data) | PPO (online) |
+| Net | Causal Transformer + 5-frame history | Plain MLP, 1-frame |
+| Train obstacles | Straight-line, `v ∈ [1, 2]` m/s | Polynomial waypoints, `v ∈ [0.5, 1.0]` m/s |
+| Safety | MPC reverse-on-collision | None |
+| Deploy | ROS + Gazebo | Custom C sim |
+
+Notable: they **never train on the polynomial-waypoint obstacle motion**
+that DynaBARN actually uses for eval — they hallucinate straight-line
+obstacles. We **do** train on the actual eval motion family (since our
+generator implements DynaBARN's Algorithm 1). That alone explains a chunk
+of the gap: their training/eval shift is in motion *shape*; ours is in
+motion *speed range* (we train at 0.5–1.0 m/s but eval includes 1.0–2.0).
 
 ### Comparison table (best public DynaBARN-60 numbers)
 
