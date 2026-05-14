@@ -381,3 +381,45 @@ Followups:
   in the task list.
 - WebM-render hard-world failures for 500M_mix vs 500M_poly to find the
   collision modes.
+
+---
+
+## 2026-05-15 — Lower train v_max to 0.5 m/s to match paper-eval cap
+**Author:** Sudhir (with Claude)
+**Files touched:** dyna_train/dyna_train.h, dyna_train/dyna_train.c,
+                  dyna_train/dyna_train.ini, dyna_train/binding.c,
+                  exp_tracker.md, logger.md (this entry)
+**Commit:** uncommitted
+
+Decision (user): keep random start/goal in training but **cap policy linear
+velocity at 0.5 m/s** to match the paper's `move_base` local planner
+(`max_vel_x = 0.5`). Previous training let the policy go up to JACKAL_V_MAX
+= 2.0 m/s, then eval clipped at 0.5 — the policy was learning aggressive
+fast maneuvers that don't work at the slower eval speed.
+
+Patches:
+- `dyna_train.h`: new env knobs `train_v_max` (forward cap), `train_v_min`
+  (reverse cap), `train_w_max` (angular cap). Mapping in `c_step`:
+  `v_cmd = v_min + (a0 + 1)/2 · (v_max - v_min)`,
+  `w_cmd = a1 · w_max`. Falls back to JACKAL_V_MAX / JACKAL_W_MAX if knob
+  ≤ 0.
+- `binding.c`: plumbs the three new kwargs through `my_init`.
+- `dyna_train.ini`: `train_v_max = 0.5`, `train_v_min = -0.5`,
+  `train_w_max = π` (≈ 3.14159).
+- `dyna_train.c`: standalone-driver default-inits the three fields so the
+  standalone build picks them up.
+
+Sanity:
+- Both python and standalone builds clean.
+- Travel-time check: `min_init_goal_dist = 12 m` at v=0.5 m/s ⇒ 24 s minimum
+  travel; `max_steps = 600` at dt=0.1 ⇒ 60 s episode budget. 36 s
+  manoeuvre headroom. Fine.
+
+Not retrained yet (per user: "dont stat traning yet"). Next training run
+will use this config. Existing checkpoints (50M_poly, 500M_poly, 500M_mix)
+were trained with v_max=2.0 and remain in-tree for comparison.
+
+Open: when retrained, expect a different per-bin profile — the policy
+should learn slow-but-precise navigation rather than fast-swerve, which
+should help hard-bin numbers and avoid the "mix loses to poly on hard"
+inversion we currently see.

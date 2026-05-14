@@ -369,10 +369,11 @@ broken-eval 75.5%. The previous result was overstating by ~38 pp due to:
 
 - [ ] WebM-render the 500M_mix vs 500M_poly trajectories on the 10 hardest
       worlds side by side to see *why* mix fails where poly succeeds.
-- [ ] Decide on `dyna_train` geometry: should we make training match the
-      eval (fixed spawn (12,0), fixed goal (-9,0), 3-walled room)? Open
-      design question — see followup task #24.
-- [ ] Once train env is decided, re-train and target ≥ 50% overall on
-      corrected eval.
+- [x] Decide on `dyna_train` geometry: **keep random start/goal**, but
+      **match eval velocity cap** (0.5 m/s). Decision logged 2026-05-14.
+      Code change: new env knobs `train_v_max`, `train_v_min`, `train_w_max`
+      in `dyna_train.h`. Defaults: `+0.5 / -0.5 / π`. Not yet retrained on
+      these — next run will use them.
+- [ ] Once retrained with v_max=0.5, re-eval and target ≥ 50% overall.
 - [ ] Eval at v_max=2.0 (no clip) for honest "what our policy can actually
       do" number. Headline 37.3% is the constrained-to-paper number.

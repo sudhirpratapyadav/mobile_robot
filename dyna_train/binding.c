@@ -38,6 +38,9 @@ void my_init(Env* env, Dict* kwargs) {
     env->freq_max           = dict_get(kwargs, "freq_max")->value;
     env->walk_step_std      = dict_get(kwargs, "walk_step_std")->value;
     env->reciprocate_min_dist = dict_get(kwargs, "reciprocate_min_dist")->value;
+    env->train_v_max        = dict_get(kwargs, "train_v_max")->value;
+    env->train_v_min        = dict_get(kwargs, "train_v_min")->value;
+    env->train_w_max        = dict_get(kwargs, "train_w_max")->value;
     init(env);
 }
 

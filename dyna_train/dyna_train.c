@@ -50,6 +50,8 @@ static DynaTrain make_env(unsigned int seed,
         .mw_sinusoidal = 0, .mw_random_walk = 0, .mw_stationary = 0,
         .amp_max = 3.0f, .freq_min = 0.05f, .freq_max = 0.5f,
         .walk_step_std = 0.4f, .reciprocate_min_dist = 4.0f,
+        // Velocity envelope: matches paper move_base local planner.
+        .train_v_max = 0.5f, .train_v_min = -0.5f, .train_w_max = (float)M_PI,
     };
     return env;
 }

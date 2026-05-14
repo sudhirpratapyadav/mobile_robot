@@ -119,6 +119,14 @@ typedef struct {
     float freq_min, freq_max;
     float walk_step_std;
     float reciprocate_min_dist;
+    // Robot-velocity caps applied to the policy output BEFORE jackal_step.
+    // Defaults: 0.5 m/s, matching the paper-eval move_base local-planner
+    // max_vel_x (so the policy trains under the same kinematic envelope it
+    // will be evaluated in). Set to 0 (or any value ≥ JACKAL_V_MAX) to
+    // effectively disable the cap.
+    float train_v_max;        // m/s, forward cap
+    float train_v_min;        // m/s, reverse cap (negative number)
+    float train_w_max;        // rad/s, angular cap
 
     unsigned int rng;
     bool window_ready;
@@ -309,8 +317,14 @@ void c_step(DynaTrain* env) {
     if (!isfinite(a1)) a1 = 0.0f;
     a0 = clampf(a0, -1.0f, 1.0f);
     a1 = clampf(a1, -1.0f, 1.0f);
-    float v_cmd = JACKAL_V_MIN + 0.5f * (a0 + 1.0f) * (JACKAL_V_MAX - JACKAL_V_MIN);
-    float w_cmd = a1 * JACKAL_W_MAX;
+    // Map normalized action ∈ [-1, 1]² to physical velocity envelope.
+    float v_lo = env->train_v_min;
+    float v_hi = env->train_v_max;
+    if (v_hi <= 0.0f) v_hi = JACKAL_V_MAX;   // 0 → "no cap" (fallback)
+    float w_hi = env->train_w_max;
+    if (w_hi <= 0.0f) w_hi = JACKAL_W_MAX;
+    float v_cmd = v_lo + 0.5f * (a0 + 1.0f) * (v_hi - v_lo);
+    float w_cmd = a1 * w_hi;
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);
 
