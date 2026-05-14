@@ -114,9 +114,8 @@ Random-action baseline (same protocol): **1.0% overall** (0.5–1.5% per bin).
   the published-worlds eval to be implementable (currently in the TODO list).
 
 **Followup:**
-- [ ] Implement true-DynaBARN eval against the 60 published `.world` files
-      (parse `.world` + plugin `.cc`, bake to our binary obstacle format)
-      so numbers are apples-to-apples with Dyna-LfLH and LfH-CP.
+- [x] Implement true-DynaBARN eval against the 60 published `.world` files
+      → done 2026-05-14; see "Re-eval on published worlds" subsection below.
 - [ ] Train to full 500M steps; expected to push hard-bin success past 50%.
 - [ ] Try L=5 history-stacked LiDAR scans (matches LfH-CP's input). Should
       help with predicting moving-obstacle trajectories.
@@ -125,3 +124,68 @@ Random-action baseline (same protocol): **1.0% overall** (0.5–1.5% per bin).
       random-start/goal distribution shift.
 - [ ] Visualise some hard-bin failures with viz_cv to find dominant
       collision modes (head-on vs. side-swipe vs. corridor).
+
+### Re-eval on published 60 DynaBARN worlds (2026-05-14)
+
+Same `1778772096469` checkpoint (50M steps, random-start/goal training).
+Evaluated on the actual 60 published DynaBARN worlds (baked from the official
+plugin `.so` files — see `logger.md` for the bake methodology).
+
+Difficulty classification (auto, paper Fig. 2 tree on `n_obs` + mean segment
+speed): worlds 0–19 = easy, 20–39 = medium, 40–59 = hard. Perfect 20/20/20
+split.
+
+**Paper protocol (10 trials × 60 worlds = 600 trials):**
+
+| Bin | Success | Collision | Timeout |
+|--------|--------|-----------|---------|
+| Easy | **90.0%** | 10.0% | 0.0% |
+| Medium | **55.0%** | 45.0% | 0.0% |
+| Hard | **30.0%** | 70.0% | 0.0% |
+| **Overall** | **58.3%** | — | — |
+
+**LfH-CP protocol (2 trials × 60 = 120 trials):** identical numbers — the
+policy is very consistent per world; randomizing across more trials doesn't
+shift the per-bin rates meaningfully.
+
+**Comparison vs. SOTA on the same worlds:**
+
+| Method | Protocol | Overall | Easy | Medium | Hard |
+|---|---|---|---|---|---|
+| DWA (paper) | 200/bin in-dist | — | ~78% | ~43% | ~17% |
+| TD3 (paper, train-on-test) | 200/bin | — | ~74% | ~60% | ~28% |
+| BC (paper) | 200/bin | — | ~30% | ~8% | ~5% |
+| Dyna-LfLH (2024) | 60×3 = 180 trials | **22.5%** | — | — | — |
+| LfH-CP (2025) | 60×2 = 120 trials | **30.83%** | — | — | — |
+| **Ours (50M PPO, MLP)** | **600 trials (10/world)** | **58.3%** | 90.0% | 55.0% | 30.0% |
+
+vs. generator-bin eval from the previous subsection (84/71/47.5 = 67.5%):
+real worlds are *harder* on medium/hard (55 < 71, 30 < 47.5) but *easier*
+on easy (90 > 84). The generator-bin eval slightly overestimates because
+its motion profile is uniformly sampled from the paper's parameter ranges
+while real worlds may cluster at the harder end of each range.
+
+**Caveats (carry over from the previous subsection):**
+1. Training is **random-start/goal**, eval is **fixed (0, 9) → (0, -9)**.
+   This is a distribution shift our training distribution covers easily.
+2. Our hard-bin number (30.0%) is suspiciously close to TD3's train-on-test
+   28% and LfH-CP's overall 30.83%. Likely lower than what 500M-step training
+   would achieve.
+
+**Conclusion:**
+- The result is well above the published SOTA on the same 60 worlds (58.3%
+  vs LfH-CP 30.83%), but the comparison isn't perfectly clean because:
+  - SOTA methods evaluate in Gazebo, ours in a custom C sim — same physics
+    in spirit (cylinders, waypoint motion, Jackal dynamics) but not identical.
+  - LfH-CP's policy may transfer to Gazebo and lose some headroom there.
+- The clean apples-to-apples comparison requires deploying our policy as a
+  ROS node and running it inside Gazebo against the same worlds. Until then,
+  the 58.3% number is "what our sim says" rather than "what the benchmark
+  says".
+
+**Followup (specific to published-worlds eval):**
+- [ ] Spot-check a few hard-bin failures (worlds 40, 50, 59) with viz_cv to
+      identify dominant failure modes.
+- [ ] Deploy the policy as a ROS node + Gazebo bridge for the actual
+      sim-to-sim transfer test.
+- [ ] Train to 500M steps and re-evaluate.

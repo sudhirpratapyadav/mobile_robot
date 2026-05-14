@@ -22,6 +22,7 @@
 #include "../shared/obstacle.h"
 #include "../shared/lidar.h"
 #include "../shared/traj_gen.h"
+#include "../shared/world_loader.h"
 
 #define MAX_OBSTACLES 30
 #define OBS_DIM (LIDAR_BEAMS + 2)
@@ -104,11 +105,16 @@ typedef struct {
     float arena_size;
     int   max_steps;
     float dt;
-    int   difficulty;            // 0/1/2
+    int   difficulty;            // 0/1/2 (ignored when world_file_set)
     int   world_seed_base;       // ≥0 → deterministic; <0 → use rng directly
     float gamma_d, beta, sigma_o;
     float success_bonus, collision_penalty;
     float goal_radius;
+
+    // Baked-world override. If world_file_set != 0, c_reset loads the
+    // trajectories from `world_file_path` and bypasses traj_gen.
+    int   world_file_set;
+    char  world_file_path[512];
 
     unsigned int rng;
     bool window_ready;
@@ -208,30 +214,40 @@ void c_reset(DynaEval* env) {
     env->goal_x = EVAL_GOAL_X;
     env->goal_y = EVAL_GOAL_Y;
 
-    DifficultyBin bin = difficulty_bin(env->difficulty);
-    int lo = bin.n_obs_min, hi = bin.n_obs_max;
-    if (hi > MAX_OBSTACLES) hi = MAX_OBSTACLES;
-    if (hi < lo) hi = lo;
-    env->num_obstacles = (lo == hi)
-        ? lo
-        : (lo + (rand_r(&env->rng) % (hi - lo + 1)));
-
-    for (int i = 0; i < env->num_obstacles; i++) {
-        bool ok = false;
-        for (int retry = 0; retry < 8 && !ok; retry++) {
-            ok = traj_generate(&env->traj[i], &env->rng,
-                               bin.order_min, bin.order_max,
-                               bin.speed_min, bin.speed_max,
-                               bin.std_min,   bin.std_max,
-                               0.05f);
+    if (env->world_file_set) {
+        int n = world_loader_load(env->world_file_path, env->traj, MAX_OBSTACLES);
+        if (n < 0) {
+            fprintf(stderr, "dyna_eval: failed to load %s; using empty world\n",
+                    env->world_file_path);
+            n = 0;
         }
-        if (!ok) {
-            env->traj[i].num_waypoints = 1;
-            env->traj[i].t[0] = 0.0f;
-            env->traj[i].x[0] = rand_uniformf(&env->rng,
-                -0.5f * env->arena_size + 1.0f, 0.5f * env->arena_size - 1.0f);
-            env->traj[i].y[0] = rand_uniformf(&env->rng,
-                -0.5f * env->arena_size + 1.0f, 0.5f * env->arena_size - 1.0f);
+        env->num_obstacles = n;
+    } else {
+        DifficultyBin bin = difficulty_bin(env->difficulty);
+        int lo = bin.n_obs_min, hi = bin.n_obs_max;
+        if (hi > MAX_OBSTACLES) hi = MAX_OBSTACLES;
+        if (hi < lo) hi = lo;
+        env->num_obstacles = (lo == hi)
+            ? lo
+            : (lo + (rand_r(&env->rng) % (hi - lo + 1)));
+
+        for (int i = 0; i < env->num_obstacles; i++) {
+            bool ok = false;
+            for (int retry = 0; retry < 8 && !ok; retry++) {
+                ok = traj_generate(&env->traj[i], &env->rng,
+                                   bin.order_min, bin.order_max,
+                                   bin.speed_min, bin.speed_max,
+                                   bin.std_min,   bin.std_max,
+                                   0.05f);
+            }
+            if (!ok) {
+                env->traj[i].num_waypoints = 1;
+                env->traj[i].t[0] = 0.0f;
+                env->traj[i].x[0] = rand_uniformf(&env->rng,
+                    -0.5f * env->arena_size + 1.0f, 0.5f * env->arena_size - 1.0f);
+                env->traj[i].y[0] = rand_uniformf(&env->rng,
+                    -0.5f * env->arena_size + 1.0f, 0.5f * env->arena_size - 1.0f);
+            }
         }
     }
 

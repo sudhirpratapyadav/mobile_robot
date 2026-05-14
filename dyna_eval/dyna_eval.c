@@ -19,7 +19,7 @@
 
 static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
                          float dt, int difficulty, int world_seed_base,
-                         float goal_radius) {
+                         float goal_radius, const char* world_file) {
     DynaEval env = {
         .arena_size = arena_size,
         .max_steps = max_steps,
@@ -34,6 +34,10 @@ static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
         .goal_radius = goal_radius,
         .rng = seed,
     };
+    if (world_file && *world_file) {
+        env.world_file_set = 1;
+        strncpy(env.world_file_path, world_file, sizeof(env.world_file_path) - 1);
+    }
     return env;
 }
 
@@ -48,6 +52,7 @@ typedef struct {
 int main(int argc, char** argv) {
     const char* csv = NULL;
     const char* load = NULL;
+    const char* world_file = NULL;
     int mode = 0;
     int episodes = 1;
     unsigned int seed = 42;
@@ -61,6 +66,7 @@ int main(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         if      (!strcmp(argv[i], "--csv") && i+1 < argc)              csv = argv[++i];
         else if (!strcmp(argv[i], "--load") && i+1 < argc)             load = argv[++i];
+        else if (!strcmp(argv[i], "--world-file") && i+1 < argc)       world_file = argv[++i];
         else if (!strcmp(argv[i], "--mode") && i+1 < argc) {
             const char* m = argv[++i];
             if (!strcmp(m, "zero")) mode = 1;
@@ -84,7 +90,8 @@ int main(int argc, char** argv) {
         fwrite(header, sizeof(int), 4, f);
 
         DynaEval env = make_env(seed, arena_size, max_steps, dt,
-                                difficulty, world_seed_base, goal_radius);
+                                difficulty, world_seed_base, goal_radius,
+                                world_file);
         allocate(&env);
 
         Weights* weights = NULL;
@@ -156,7 +163,8 @@ int main(int argc, char** argv) {
     // Interactive raylib mode
     srand(seed);
     DynaEval env = make_env(seed, arena_size, max_steps, dt,
-                            difficulty, world_seed_base, goal_radius);
+                            difficulty, world_seed_base, goal_radius,
+                            world_file);
     allocate(&env);
     c_reset(&env);
     c_render(&env);

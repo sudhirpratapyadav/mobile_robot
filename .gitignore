@@ -13,6 +13,15 @@ __pycache__/
 *.parquet
 *.csv
 
+# Vendored DynaBARN drop (113 MB; obtained from the Tufts Box link in the README)
+DynaBARN.zip
+external/DynaBARN/
+
+# Baked artifacts (regenerable from DynaBARN.zip via tools/bake_worlds.py)
+external/baked_worlds/
+external/baked_worlds_report.json
+external/baked_worlds_classified.json
+
 # Editor / OS
 .vscode/
 .idea/

@@ -150,3 +150,81 @@ Open / next:
 - Full 500M-step training run.
 - Ablation: L=5 history scans.
 - Visual inspection of hard-bin failures with `viz_cv`.
+
+---
+
+## 2026-05-14 — Bake + eval on the 60 published DynaBARN worlds
+**Author:** Sudhir (with Claude)
+**Files touched:** tools/bake_worlds.py, tools/classify_worlds.py,
+                  tools/render_baked_world.py, tools/eval_published_summary.py,
+                  shared/world_loader.h, dyna_eval/dyna_eval.{h,c},
+                  run_eval_published.sh, external/DynaBARN/, external/baked_worlds/
+**Commit:** uncommitted
+
+Sudhir manually downloaded the DynaBARN.zip (113 MB) into `dyna_barn/` from
+the official Tufts Box link (which is unreachable from this sandbox via curl
+— browser flow was required). Extracted to `external/DynaBARN/` with 600
+compiled `.so` plugins + 60 `.world` SDFs + the generator scripts.
+
+Bake methodology — **no .cc source ships with the dataset; only compiled
+`.so`** files. Recovered waypoints by disassembly:
+
+- Each plugin's `Load()` function emits a sequence of:
+  `CreateKeyFrame(time); key->Translation(Vector3d(x, y, 0));` calls.
+- The `time` argument arrives in `xmm0` from one of:
+  1. `movsd ADDR(%rip),%xmm0`  (most cases)
+  2. `mov ADDR(%rip),%rax; mov %rax,STACK; movsd STACK,%xmm0` (some cases)
+  3. `pxor %xmm0,%xmm0`        (t = 0.0 first keyframe)
+- The `x` and `y` are loaded via `movsd ADDR(%rip),%xmm0` then stored to
+  the `Vector3d` stack slots.
+- `tools/bake_worlds.py` walks `objdump -d` output for each plugin,
+  tracks rip-relative double-loads (matching `movsd|mov`, comment-resolved
+  vaddr), and pairs them with the call-site sequence to recover all
+  `(time, x, y)` triples per obstacle.
+- Output format: small flat binary (`uint32 magic|version|n_obs`, then per
+  obstacle `uint32 n_waypoints` and `float32[3]` per waypoint).
+
+Verification:
+- Stress: all 60 worlds baked in 11s, 0 errors. Obstacle counts 5–19, total
+  waypoints 100–212, durations 42–86s, all coordinates within [-10, 10].
+- Match: `dyna_eval --world-file world_000.bin` t=0 obstacle positions match
+  the baked file's first-waypoint positions byte-exact.
+- Visual: rendered overlays for worlds 0, 30, 50 (`runs/eval/baked_check/`).
+  Trajectories are clearly polynomial curves crossing the arena, start/end
+  on or near the boundaries. Matches the paper Fig. 1 visual style.
+
+Difficulty classification (`tools/classify_worlds.py`):
+- Auto-classified per Fig. 2 tree: `n_obs < 10 AND mean_speed < 1.0` → easy;
+  `n_obs ≥ 10 AND mean_speed ≥ 1.0` → hard; mixed → medium.
+- Result: perfect 20/20/20 split (easy = worlds 0–19, medium = 20–39,
+  hard = 40–59). The published worlds are **ordered by difficulty**.
+
+`dyna_eval` extended:
+- New `world_file_path[512] + world_file_set` fields on the env struct.
+- When `world_file_set=1`, `c_reset` calls `world_loader_load()` (new
+  `shared/world_loader.h`) instead of generating fresh trajectories.
+- Standalone CLI: `--world-file <path>`.
+
+New `run_eval_published.sh`:
+- Loops over `external/baked_worlds/world_*.bin`, runs N trials per world.
+- Per-world seeds = `10000 + idx*100` (deterministic, reproducible).
+- Aggregates into `summary.json` via `tools/eval_published_summary.py`.
+
+Result on the 50M-step checkpoint (`1778772096469`):
+
+| Bin | 10-trial (paper protocol) | 2-trial (LfH-CP protocol) |
+|---|---|---|
+| Easy | 90.0% | 90.0% |
+| Medium | 55.0% | 55.0% |
+| Hard | 30.0% | 30.0% |
+| **Overall** | **58.3%** | **58.3%** |
+
+vs. published SOTA on the same 60 worlds: LfH-CP 30.83%, Dyna-LfLH 22.5%.
+
+Full caveats + per-bin breakdown in `exp_tracker.md`.
+
+Open follow-ups (same as exp_tracker):
+- Train to 500M; revisit hard-bin number.
+- L=5 history stacking.
+- Visualize hard-bin failures.
+- Sim-to-sim deployment in Gazebo for a clean apples-to-apples comparison.
