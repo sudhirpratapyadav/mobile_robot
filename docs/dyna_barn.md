@@ -304,9 +304,16 @@ explicitly evaluate on the public 60-world subset are **Dyna-LfLH** (2024) and
   encoded by a 2-layer 1D CNN (kernel 5) to a 256-d embedding.
 - **Eval protocol**: 60 envs × 2 trials = **120 trials**.
 - **Reported number**: **30.83% overall success rate** vs. Dyna-LfLH's 22.5%.
-- **Caveat**: paper does not break results down by easy/medium/hard, only an overall
-  average across all 60 envs. Direct comparison to the DynaBARN-paper TD3 number
-  (which is **per-difficulty**, in-distribution) is not apples-to-apples.
+  Verbatim from paper §IV-D:
+  > "LfH-CP achieves a higher success rate at 30.83% [over 60 envs × 2 trials =
+  > 120 trials], showing that hallucinated critical points provide strong
+  > navigation performance. In contrast, Dyna-LfLH underperforms with success
+  > rates of 22.5%"
+- **Verified 2026-05-14**: both numbers are **overall averages across all 60
+  worlds (easy + medium + hard combined)**, not hard-bin-only. Paper does not
+  publish a per-difficulty breakdown.
+- **Caveat**: direct comparison to the DynaBARN-paper TD3 number (which is
+  *per-difficulty*, *in-distribution*) is not apples-to-apples.
 
 ### Comparison table (best public DynaBARN-60 numbers)
 

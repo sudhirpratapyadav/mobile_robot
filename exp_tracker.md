@@ -215,12 +215,40 @@ else identical (env, reward, PPO knobs, network arch, seed=42).
 
 | Method | Year | Overall | Easy | Medium | Hard |
 |---|---|---|---|---|---|
-| Dyna-LfLH | 2024 | 22.5% | — | — | — |
-| LfH-CP (prior SOTA) | 2025 | 30.83% | — | — | — |
+| Dyna-LfLH | 2024 | 22.5%* | — | — | — |
+| LfH-CP (prior SOTA) | 2025 | 30.83%* | — | — | — |
 | Ours @ 50M PPO | 2026 | 58.3% | 90.0% | 55.0% | 30.0% |
 | **Ours @ 500M PPO** | **2026** | **75.5%** | **100.0%** | **88.5%** | **38.0%** |
 
-That's roughly **+45 pp over published SOTA** at 10× our 50M data budget.
+\* **Confirmed (LfH-CP arXiv 2509.26513, §IV-D):**
+  *"LfH-CP achieves a higher success rate at 30.83% [over 60 envs × 2 trials =
+  120 trials], showing that hallucinated critical points provide strong
+  navigation performance. In contrast, Dyna-LfLH underperforms with success
+  rates of 22.5%"*
+  → Both numbers are **overall** averages across all 60 worlds (easy + medium
+  + hard combined), not hard-only. Paper does not publish per-bin breakdowns.
+
+That's roughly **+45 pp over published SOTA on the overall metric** at 10×
+our 50M data budget.
+
+**A more honest read of the per-bin gap:**
+
+LfH-CP's overall 30.83% over 20-each E/M/H worlds is consistent with a wide
+range of per-bin splits. If their bins follow the same monotone pattern
+we see (easy ≫ medium ≫ hard), plausible splits would be something like:
+
+- 70 / 20 / 3 % (E/M/H)  → averages 31%
+- 50 / 30 / 12 %         → averages 31%
+- 80 / 10 / 3 %          → averages 31%
+
+We can't tell without their paper publishing the breakdown. The
+implication for our comparison:
+
+- On **easy** we likely have a smaller advantage than the headline (we get
+  100% vs their plausible 50–80%).
+- On **hard** we likely have a much larger advantage (38% vs their
+  plausible single-digit %).
+- The headline +45 pp is real, but masks where the work happens.
 
 **Per-world breakdown** (worlds with any failure across 10 trials):
 
