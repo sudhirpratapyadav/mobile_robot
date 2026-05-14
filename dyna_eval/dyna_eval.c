@@ -20,7 +20,8 @@
 static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
                          float dt, int difficulty, int world_seed_base,
                          float goal_radius, const char* world_file,
-                         int open_front, float v_max_clip, float goal_box_half) {
+                         int open_front, float v_max_clip, float goal_box_half,
+                         float a_max, float alpha_max) {
     DynaEval env = {
         .arena_size = arena_size,
         .max_steps = max_steps,
@@ -36,6 +37,8 @@ static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
         .open_front = open_front,
         .v_max_clip = v_max_clip,
         .goal_box_half = goal_box_half,
+        .a_max = a_max,
+        .alpha_max = alpha_max,
         .rng = seed,
     };
     if (world_file && *world_file) {
@@ -70,6 +73,8 @@ int main(int argc, char** argv) {
     int   open_front    = 1;
     float v_max_clip    = EVAL_VMAX_MOVEBASE;   // 0.5 m/s
     float goal_box_half = 0.3f;                 // paper arrival_gaol
+    float a_max         = 10.0f;                // paper acc_lim_x
+    float alpha_max     = 20.0f;                // paper acc_lim_theta
 
     for (int i = 1; i < argc; i++) {
         if      (!strcmp(argv[i], "--csv") && i+1 < argc)              csv = argv[++i];
@@ -92,6 +97,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--open-front") && i+1 < argc)       open_front = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--v-max-clip") && i+1 < argc)       v_max_clip = atof(argv[++i]);
         else if (!strcmp(argv[i], "--goal-box-half") && i+1 < argc)    goal_box_half = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--a-max") && i+1 < argc)            a_max = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--alpha-max") && i+1 < argc)        alpha_max = atof(argv[++i]);
     }
 
     if (csv) {
@@ -102,7 +109,8 @@ int main(int argc, char** argv) {
 
         DynaEval env = make_env(seed, arena_size, max_steps, dt,
                                 difficulty, world_seed_base, goal_radius,
-                                world_file, open_front, v_max_clip, goal_box_half);
+                                world_file, open_front, v_max_clip, goal_box_half,
+                                a_max, alpha_max);
         allocate(&env);
 
         Weights* weights = NULL;
@@ -175,7 +183,8 @@ int main(int argc, char** argv) {
     srand(seed);
     DynaEval env = make_env(seed, arena_size, max_steps, dt,
                             difficulty, world_seed_base, goal_radius,
-                            world_file, open_front, v_max_clip, goal_box_half);
+                            world_file, open_front, v_max_clip, goal_box_half,
+                            a_max, alpha_max);
     allocate(&env);
     c_reset(&env);
     c_render(&env);

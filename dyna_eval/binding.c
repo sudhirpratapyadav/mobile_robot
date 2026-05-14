@@ -23,6 +23,8 @@ void my_init(Env* env, Dict* kwargs) {
     env->open_front        = (int)dict_get(kwargs, "open_front")->value;
     env->v_max_clip        = dict_get(kwargs, "v_max_clip")->value;
     env->goal_box_half     = dict_get(kwargs, "goal_box_half")->value;
+    env->a_max             = dict_get(kwargs, "a_max")->value;
+    env->alpha_max         = dict_get(kwargs, "alpha_max")->value;
     init(env);
 }
 

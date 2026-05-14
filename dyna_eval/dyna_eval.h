@@ -124,7 +124,11 @@ typedef struct {
     // Corrected-eval-geometry knobs (default = real-paper setup):
     int   open_front;             // 1 = no wall on +x side (real eval); 0 = closed box
     float v_max_clip;             // clamp policy v output to ±this. 0 → uncapped.
-    float goal_box_half;           // L∞ "box" half-extent for success (paper: 0.3)
+    float goal_box_half;          // L∞ "box" half-extent for success (paper: 0.3)
+    // Acceleration limits — paper base_local_planner_params.yaml.
+    // |Δv| ≤ a_max·dt, |Δw| ≤ alpha_max·dt per step. ≤ 0 disables.
+    float a_max;                  // m/s²
+    float alpha_max;              // rad/s²
 
     // Baked-world override. If world_file_set != 0, c_reset loads the
     // trajectories from `world_file_path` and bypasses traj_gen.
@@ -291,6 +295,19 @@ void c_step(DynaEval* env) {
     // Apply optional eval-time velocity cap (paper move_base cap = 0.5 m/s).
     if (env->v_max_clip > 0.0f) {
         v_cmd = clampf(v_cmd, -env->v_max_clip, env->v_max_clip);
+    }
+    // Slew-rate (acceleration) limiting — paper base_local_planner_params.yaml.
+    if (env->a_max > 0.0f) {
+        float dv_max = env->a_max * env->dt;
+        float dv = v_cmd - env->robot.v;
+        if (dv >  dv_max) v_cmd = env->robot.v + dv_max;
+        if (dv < -dv_max) v_cmd = env->robot.v - dv_max;
+    }
+    if (env->alpha_max > 0.0f) {
+        float dw_max = env->alpha_max * env->dt;
+        float dw = w_cmd - env->robot.w;
+        if (dw >  dw_max) w_cmd = env->robot.w + dw_max;
+        if (dw < -dw_max) w_cmd = env->robot.w - dw_max;
     }
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);

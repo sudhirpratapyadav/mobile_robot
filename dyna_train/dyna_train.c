@@ -52,6 +52,8 @@ static DynaTrain make_env(unsigned int seed,
         .walk_step_std = 0.4f, .reciprocate_min_dist = 4.0f,
         // Velocity envelope: matches paper move_base local planner.
         .train_v_max = 0.5f, .train_v_min = -0.5f, .train_w_max = (float)M_PI,
+        // Acceleration envelope: matches paper base_local_planner_params.yaml.
+        .train_a_max = 10.0f, .train_alpha_max = 20.0f,
     };
     return env;
 }

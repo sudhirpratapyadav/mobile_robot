@@ -127,6 +127,13 @@ typedef struct {
     float train_v_max;        // m/s, forward cap
     float train_v_min;        // m/s, reverse cap (negative number)
     float train_w_max;        // rad/s, angular cap
+    // Acceleration limits (slew rate on commanded v / w). Matches the paper's
+    // base_local_planner_params.yaml (acc_lim_x = 10, acc_lim_theta = 20).
+    // Per step: |v_new - v_prev| <= train_a_max * dt;
+    //           |w_new - w_prev| <= train_alpha_max * dt.
+    // Set to <= 0 to disable.
+    float train_a_max;        // m/s², linear-acceleration cap
+    float train_alpha_max;    // rad/s², angular-acceleration cap
 
     unsigned int rng;
     bool window_ready;
@@ -325,6 +332,20 @@ void c_step(DynaTrain* env) {
     if (w_hi <= 0.0f) w_hi = JACKAL_W_MAX;
     float v_cmd = v_lo + 0.5f * (a0 + 1.0f) * (v_hi - v_lo);
     float w_cmd = a1 * w_hi;
+    // Slew-rate (acceleration) limiting: clamp the per-step change so the
+    // policy can't ask for physically-impossible jumps in v / w.
+    if (env->train_a_max > 0.0f) {
+        float dv_max = env->train_a_max * env->dt;
+        float dv = v_cmd - env->robot.v;
+        if (dv >  dv_max) v_cmd = env->robot.v + dv_max;
+        if (dv < -dv_max) v_cmd = env->robot.v - dv_max;
+    }
+    if (env->train_alpha_max > 0.0f) {
+        float dw_max = env->train_alpha_max * env->dt;
+        float dw = w_cmd - env->robot.w;
+        if (dw >  dw_max) w_cmd = env->robot.w + dw_max;
+        if (dw < -dw_max) w_cmd = env->robot.w - dw_max;
+    }
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);
 

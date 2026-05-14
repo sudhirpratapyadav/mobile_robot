@@ -374,6 +374,33 @@ broken-eval 75.5%. The previous result was overstating by ~38 pp due to:
       Code change: new env knobs `train_v_max`, `train_v_min`, `train_w_max`
       in `dyna_train.h`. Defaults: `+0.5 / -0.5 / π`. Not yet retrained on
       these — next run will use them.
-- [ ] Once retrained with v_max=0.5, re-eval and target ≥ 50% overall.
+- [x] Add finite acceleration limits (2026-05-15). New env knobs
+      `train_a_max=10`, `train_alpha_max=20` (paper
+      `base_local_planner_params.yaml` `acc_lim_x` / `acc_lim_theta`).
+      Mirror knobs `a_max`, `alpha_max` on `dyna_eval`. Per-step slew:
+      `|Δv| ≤ a_max·dt`, `|Δw| ≤ alpha_max·dt`. Applied AFTER v_max_clip.
+
+### Re-eval under corrected geometry + accel limits (existing ckpts)
+
+The existing 500M_poly and 500M_mix were trained without accel limits.
+Eval with accel limits at deploy:
+
+| Ckpt | Easy | Medium | Hard | Overall |
+|---|---|---|---|---|
+| 500M_poly, no-accel eval (`eval_paper`)       | 58.0% | 37.0% | 11.5% | 35.5% |
+| 500M_poly, accel-capped eval (`eval_paper_accel`) | 57.5% | 37.5% |  5.0% | 33.3% |
+| 500M_mix,  no-accel eval (`eval_paper`)       | 63.0% | 44.0% |  5.0% | 37.3% |
+| 500M_mix,  accel-capped eval (`eval_paper_accel`) | 66.0% | 47.5% |  3.0% | 38.8% |
+
+- Poly drops 2.2 pp overall when accel-capped: hard 11.5→5.0 (-6.5).
+  The policy was relying on snap-maneuvers that the slew-rate cap forbids.
+- Mix actually *gains* 1.5 pp: easy +3.0, medium +3.5, hard −2.0. Slightly
+  smoother control → fewer easy/medium collisions, but the snap-recover
+  reflex was helping on hard so it loses some.
+- Both inversions reinforce the point: training with accel limits ought to
+  fix this. Next step: retrain.
+
+- [ ] Once retrained with v_max=0.5 + accel limits, re-eval and target
+      ≥ 50% overall.
 - [ ] Eval at v_max=2.0 (no clip) for honest "what our policy can actually
-      do" number. Headline 37.3% is the constrained-to-paper number.
+      do" number. Headline 38.8% is the constrained-to-paper number.

@@ -423,3 +423,41 @@ Open: when retrained, expect a different per-bin profile — the policy
 should learn slow-but-precise navigation rather than fast-swerve, which
 should help hard-bin numbers and avoid the "mix loses to poly on hard"
 inversion we currently see.
+
+---
+
+## 2026-05-15 — Finite acceleration limits in both envs
+**Author:** Sudhir (with Claude)
+**Files touched:** dyna_train/dyna_train.{h,c,ini}, dyna_train/binding.c,
+                  dyna_eval/dyna_eval.{h,c,ini}, dyna_eval/binding.c,
+                  exp_tracker.md, logger.md
+**Commit:** uncommitted
+
+User pointed out: the policy could change v and w arbitrarily per step,
+which is non-physical. Real Jackal under move_base has slew-rate limits
+from `base_local_planner_params.yaml`:
+  acc_lim_x       = 10 m/s²
+  acc_lim_theta   = 20 rad/s²
+
+Added matching slew-rate clamps in both envs. Per step, after the
+unit-square→physical mapping (and after v_max_clip in eval), the commanded
+v / w are constrained by:
+  |v_cmd - v_prev| <= a_max     · dt    (= 1.0 m/s   at dt=0.1)
+  |w_cmd - w_prev| <= alpha_max · dt    (= 2.0 rad/s at dt=0.1)
+
+At v ∈ [-0.5, 0.5] (span 1.0), the linear cap is not binding — but the
+angular one (w ∈ [-π, π], span 6.28) **is**: the policy can no longer
+swing w from -π to +π in a single step.
+
+New knobs:
+  dyna_train.h: train_a_max=10, train_alpha_max=20
+  dyna_eval.h:  a_max=10, alpha_max=20
+Plumbed through binding.c and the .ini files. Set ≤ 0 to disable.
+
+Existing-ckpt sanity numbers (corrected geometry + accel-capped eval):
+  500M_poly:   58.0 / 37.0 / 11.5 → 57.5 / 37.5 / 5.0  (35.5 → 33.3 overall)
+  500M_mix:    63.0 / 44.0 /  5.0 → 66.0 / 47.5 / 3.0  (37.3 → 38.8 overall)
+
+Poly loses on hard (snap-maneuvers were helping); mix gains on easy/medium
+(smoother control under the cap). Retraining with the cap should fix both
+sides.
