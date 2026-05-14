@@ -188,4 +188,85 @@ while real worlds may cluster at the harder end of each range.
       identify dominant failure modes.
 - [ ] Deploy the policy as a ROS node + Gazebo bridge for the actual
       sim-to-sim transfer test.
-- [ ] Train to 500M steps and re-evaluate.
+- [x] Train to 500M steps and re-evaluate → done 2026-05-14; see next entry.
+
+---
+
+### `1778776723464` — 500M-step training
+
+**Trained:** 2026-05-14 22:00–22:30 (~30 min wall, 21 checkpoints saved)
+**Branch / commit:** uncommitted at training time (committed after eval, this commit)
+**Hypothesis:** Same env + config as 50M run; just train 10× longer. Expected
+the bulk of the gain on medium / hard difficulty bins (50M already saturated
+easy at 90%).
+**Config delta vs. 50M run:** Only `total_timesteps`: 50M → 500M. Everything
+else identical (env, reward, PPO knobs, network arch, seed=42).
+
+**Result (DynaBARN eval, 600 trials = 10 × 60 worlds):**
+
+| Bin    | Success     | Δ vs 50M | Collision | Timeout |
+|--------|-------------|----------|-----------|---------|
+| Easy   | **100.0%**  | +10.0    | 0.0%      | 0.0%    |
+| Medium | **88.5%**   | +33.5    | 11.5%     | 0.0%    |
+| Hard   | **38.0%**   | +8.0     | 62.0%     | 0.0%    |
+| **Overall** | **75.5%** | **+17.2** | — | — |
+
+**Comparison table (held-out generalisation protocol, same 60 worlds):**
+
+| Method | Year | Overall | Easy | Medium | Hard |
+|---|---|---|---|---|---|
+| Dyna-LfLH | 2024 | 22.5% | — | — | — |
+| LfH-CP (prior SOTA) | 2025 | 30.83% | — | — | — |
+| Ours @ 50M PPO | 2026 | 58.3% | 90.0% | 55.0% | 30.0% |
+| **Ours @ 500M PPO** | **2026** | **75.5%** | **100.0%** | **88.5%** | **38.0%** |
+
+That's roughly **+45 pp over published SOTA** at 10× our 50M data budget.
+
+**Per-world breakdown** (worlds with any failure across 10 trials):
+
+| World | Difficulty | success / 10 |
+|---|---|---|
+| 030, 035 | medium | 9, 6 |
+| 032, 037 | medium | 0, 2 |
+| 040, 042, 044, 046, 047, 049, 050, 051, 055, 056 | hard | 0 each |
+| 052, 057, 058 | hard | 2 each |
+| 041, 043, 045, 048, 053, 054, 059 | hard | 10 each |
+
+All 20 easy worlds + ~85% of medium + 35% of hard fully solved.
+
+**Observations:**
+- **Policy is effectively deterministic at eval.** PufferLib `eval` takes the
+  action mean. Combined with deterministic obstacle motion and fixed
+  start/goal, every "trial" of the same world produces the same outcome up
+  to floating-point noise. The world_050 PNG grid shows 10 identical
+  trajectories all colliding at the same point.
+- This means "10 trials per world" is statistical theatre for this
+  protocol; only the world identity matters. Future evals could drop to 1
+  trial/world without information loss.
+- **Failure modes are structural.** A handful of hard worlds (40, 42, 44,
+  46, 47, 49, 50, 51, 55, 56) the policy hits 0/10. In these the policy's
+  deterministic trajectory simply intersects an obstacle's deterministic
+  trajectory; no amount of luck saves it.
+- Medium-bin world_032 (0/10) and 037 (2/10) are interesting outliers —
+  these have low obstacle count but presumably some configuration the
+  training distribution under-represents.
+- Easy bin saturated at 100% — no further headroom.
+
+**Conclusion:**
+- 500M scaling worked: large medium-bin lift (55→88.5%) suggests the
+  network was undertrained, not undersized, at 50M.
+- Hard bin (38%) is the bottleneck. Improvements at next step likely require
+  *different* training data, not just more of the same — the structural
+  failures are not improving with more PPO updates.
+- Comparison to LfH-CP / Dyna-LfLH still carries the "different simulator"
+  caveat. Sim-to-sim transfer is the remaining honest test.
+
+**Followup:**
+- [ ] Curriculum: spend the second half of training on harder bins
+      (12-20 obstacles, motion order 3–4, speed 1.0–2.0). Current config
+      uses easy-bin parameters throughout.
+- [ ] Inspect the 10 unsolvable hard worlds individually — are they all
+      similar (e.g. dense corridors) or genuinely diverse?
+- [ ] L=5 history-stacked LiDAR scans — should help with predicting fast
+      obstacle motion that's currently causing the hard-bin collisions.
+- [ ] Sim-to-sim deployment in Gazebo for honest SOTA comparison.

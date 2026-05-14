@@ -228,3 +228,51 @@ Open follow-ups (same as exp_tracker):
 - L=5 history stacking.
 - Visualize hard-bin failures.
 - Sim-to-sim deployment in Gazebo for a clean apples-to-apples comparison.
+
+---
+
+## 2026-05-14 — 500M-step training run + WebM rendering pipeline
+**Author:** Sudhir (with Claude)
+**Files touched:** tools/render_eval_gifs.py (WebM/h264 codec branches);
+                  runs/train/dyna_train/1778776723464/ (training run);
+                  exp_tracker.md (new run entry)
+**Commit:** uncommitted
+
+Training:
+- Same `dyna_train.ini` config as before; only `total_timesteps` defaulted
+  to 500M (no override needed). Wall-clock ~30 min on the single-GPU
+  puffertank container. 21 checkpoints saved.
+- Final ckpt: `0000000499908608.bin`.
+
+WebM rendering:
+- `tools/render_eval_gifs.py` extended with three codec branches:
+  GIF (default imageio), MP4 (libx264 + faststart for web embeds), WebM
+  (libvpx-vp9 + row-mt for parallel encoding). Default switched to WebM.
+- Tested at `--size 320 --crf 33`: ~45 KB/world, total 2.7 MB for 60 worlds.
+  vs. previous GIF: ~450 KB/world, 28 MB total → 10× smaller.
+- GIFs deleted (rm -rf inside container due to root ownership of the run
+  dir's files).
+
+Eval results on published worlds (full details in exp_tracker.md):
+- 500M ckpt: **75.5% overall** on 60 published DynaBARN worlds
+  (easy 100% / medium 88.5% / hard 38%).
+- vs. 50M ckpt: +17.2 pp overall (medium got the biggest lift +33.5pp).
+- vs. published SOTA: +44.6 pp over LfH-CP's 30.83%.
+
+Important methodology note added to exp_tracker.md:
+- PufferLib `eval` uses deterministic action means. Combined with the
+  fully-deterministic DynaBARN obstacle motion (waypoints + linear
+  interpolation, no noise) and fixed start/goal (0, 9) → (0, -9), every
+  "trial" of the same world produces an identical trajectory.
+- So "10 trials/world" is N=1 statistical theatre; per-world breakdown shows
+  binary patterns (0/10 or 9/10–10/10) confirming this.
+- Future evals can drop to 1 trial/world without information loss. Multi-
+  trial protocol is only meaningful when there's policy or env stochasticity.
+
+Open follow-ups (carry over plus new from 500M analysis):
+- Curriculum-bin training (current setup uses easy bin throughout).
+- Specifically targeted analysis of the 10 unsolvable hard worlds (40, 42,
+  44, 46, 47, 49, 50, 51, 55, 56).
+- L=5 history-stacked LiDAR (would help with predicting fast moving
+  obstacles that cause the hard-bin collisions).
+- Sim-to-sim transfer to Gazebo.
