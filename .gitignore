@@ -1,0 +1,23 @@
+# Training artifacts (checkpoints, plots, eval pages)
+runs/
+
+# Compiled / build outputs
+*.o
+*.so
+*.bin
+__pycache__/
+*.pyc
+*.pyo
+
+# Trajectory dumps
+*.parquet
+*.csv
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Logs / scratch
+*.log
+*.tmp
