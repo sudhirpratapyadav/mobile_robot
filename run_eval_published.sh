@@ -40,7 +40,9 @@ cd "$PUFFER_ROOT"
 
 CKPT_NAME=$(basename "$CKPT" .bin)
 RUN_DIR=$(dirname "$CKPT")
-OUT_DIR="$RUN_DIR/eval_published/$CKPT_NAME"
+# OUT_DIR_TAG lets the caller separate eval variants (corrected vs old). Default = corrected.
+OUT_DIR_TAG="${OUT_DIR_TAG:-eval_paper}"
+OUT_DIR="$RUN_DIR/$OUT_DIR_TAG/$CKPT_NAME"
 mkdir -p "$OUT_DIR/per_world"
 
 echo "Checkpoint:     $CKPT"

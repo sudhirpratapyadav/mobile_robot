@@ -20,6 +20,9 @@ void my_init(Env* env, Dict* kwargs) {
     env->success_bonus     = dict_get(kwargs, "success_bonus")->value;
     env->collision_penalty = dict_get(kwargs, "collision_penalty")->value;
     env->goal_radius       = dict_get(kwargs, "goal_radius")->value;
+    env->open_front        = (int)dict_get(kwargs, "open_front")->value;
+    env->v_max_clip        = dict_get(kwargs, "v_max_clip")->value;
+    env->goal_box_half     = dict_get(kwargs, "goal_box_half")->value;
     init(env);
 }
 

@@ -41,6 +41,7 @@
 #include "../shared/obstacle.h"
 #include "../shared/lidar.h"
 #include "../shared/traj_gen.h"
+#include "../shared/motion.h"
 
 #define MAX_OBSTACLES 30
 #define OBS_DIM (LIDAR_BEAMS + 2)            // 720 + (goal_dx_body, goal_dy_body)
@@ -110,6 +111,14 @@ typedef struct {
     float success_bonus;
     float collision_penalty;
     float goal_radius;
+
+    // Motion-family mixture (each weight is sampled uniformly from a Categorical)
+    int   mw_poly, mw_linear, mw_reciprocating, mw_sinusoidal, mw_random_walk, mw_stationary;
+    // Sinusoidal / random-walk knobs
+    float amp_max;
+    float freq_min, freq_max;
+    float walk_step_std;
+    float reciprocate_min_dist;
 
     unsigned int rng;
     bool window_ready;
@@ -238,19 +247,39 @@ void c_reset(DynaTrain* env) {
     // Sample start + goal.
     sample_start_goal(env);
 
-    // Generate one trajectory per obstacle. Retry up to 8 times each — failures
-    // are very rare (see stress test) but possible for ill-conditioned fits.
+    // Build per-episode MotionParams + family weights from env config.
+    MotionParams mp = motion_default_params();
+    mp.speed_min            = env->speed_min;
+    mp.speed_max            = env->speed_max;
+    mp.order_min            = env->order_min;
+    mp.order_max            = env->order_max;
+    mp.std_min              = env->std_min;
+    mp.std_max              = env->std_max;
+    mp.amp_max              = env->amp_max;
+    mp.freq_min             = env->freq_min;
+    mp.freq_max             = env->freq_max;
+    mp.walk_step_std        = env->walk_step_std;
+    mp.reciprocate_min_dist = env->reciprocate_min_dist;
+
+    int weights[MOTION_FAMILY_COUNT] = {
+        env->mw_poly,
+        env->mw_linear,
+        env->mw_reciprocating,
+        env->mw_sinusoidal,
+        env->mw_random_walk,
+        env->mw_stationary,
+    };
+
+    // Generate one trajectory per obstacle: pick a family per obstacle, then
+    // generate. Retry up to 8 times each (polynomial fits can fail).
     for (int i = 0; i < env->num_obstacles; i++) {
         bool ok = false;
         for (int retry = 0; retry < 8 && !ok; retry++) {
-            ok = traj_generate(&env->traj[i], &env->rng,
-                               env->order_min, env->order_max,
-                               env->speed_min, env->speed_max,
-                               env->std_min,   env->std_max,
-                               0.05f);
+            MotionFamily fam = motion_pick_family(&env->rng, weights);
+            ok = motion_generate(&env->traj[i], fam, &env->rng, &mp);
         }
         if (!ok) {
-            // Degenerate fallback: a stationary obstacle at a random point.
+            // Stationary-at-random fallback if everything failed.
             env->traj[i].num_waypoints = 1;
             env->traj[i].t[0] = 0.0f;
             env->traj[i].x[0] = rand_uniformf(&env->rng,

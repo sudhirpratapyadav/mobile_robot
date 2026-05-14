@@ -27,6 +27,17 @@ void my_init(Env* env, Dict* kwargs) {
     env->success_bonus      = dict_get(kwargs, "success_bonus")->value;
     env->collision_penalty  = dict_get(kwargs, "collision_penalty")->value;
     env->goal_radius        = dict_get(kwargs, "goal_radius")->value;
+    env->mw_poly            = (int)dict_get(kwargs, "mw_poly")->value;
+    env->mw_linear          = (int)dict_get(kwargs, "mw_linear")->value;
+    env->mw_reciprocating   = (int)dict_get(kwargs, "mw_reciprocating")->value;
+    env->mw_sinusoidal      = (int)dict_get(kwargs, "mw_sinusoidal")->value;
+    env->mw_random_walk     = (int)dict_get(kwargs, "mw_random_walk")->value;
+    env->mw_stationary      = (int)dict_get(kwargs, "mw_stationary")->value;
+    env->amp_max            = dict_get(kwargs, "amp_max")->value;
+    env->freq_min           = dict_get(kwargs, "freq_min")->value;
+    env->freq_max           = dict_get(kwargs, "freq_max")->value;
+    env->walk_step_std      = dict_get(kwargs, "walk_step_std")->value;
+    env->reciprocate_min_dist = dict_get(kwargs, "reciprocate_min_dist")->value;
     init(env);
 }
 

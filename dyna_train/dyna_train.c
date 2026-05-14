@@ -45,6 +45,11 @@ static DynaTrain make_env(unsigned int seed,
         .collision_penalty = 10.0f,
         .goal_radius = goal_radius,
         .rng = seed,
+        // Motion-family defaults: poly-only, matching the historical config.
+        .mw_poly = 1, .mw_linear = 0, .mw_reciprocating = 0,
+        .mw_sinusoidal = 0, .mw_random_walk = 0, .mw_stationary = 0,
+        .amp_max = 3.0f, .freq_min = 0.05f, .freq_max = 0.5f,
+        .walk_step_std = 0.4f, .reciprocate_min_dist = 4.0f,
     };
     return env;
 }

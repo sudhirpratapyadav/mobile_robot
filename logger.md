@@ -276,3 +276,108 @@ Open follow-ups (carry over plus new from 500M analysis):
 - L=5 history-stacked LiDAR (would help with predicting fast moving
   obstacles that cause the hard-bin collisions).
 - Sim-to-sim transfer to Gazebo.
+
+---
+
+## 2026-05-14 — Motion-family mixture (6 families) + 500M training
+**Author:** Sudhir (with Claude)
+**Files touched:** shared/motion.h (new); dyna_train/dyna_train.h
+                  (mixture sampler integration); dyna_train/binding.c;
+                  dyna_train/dyna_train.c; dyna_train/dyna_train.ini
+                  (broadened ranges + 6-family equal weights)
+**Commit:** uncommitted
+
+Motivation: the previous 500M run trained on the DynaBARN easy bin only
+(poly motion, speed 0.5–1.0, std 0.01–0.1, 5–10 obstacles). Hard-bin failures
+in eval were 100% on 10 of 20 hard worlds — structural failures suggesting
+the policy never saw enough variety. Decision (with user): try a broader
+training distribution to learn a more general "avoid moving things" skill.
+
+New `shared/motion.h`:
+- 6 motion families: `MOTION_POLY` (existing paper Alg. 1), `MOTION_LINEAR`
+  (constant velocity + wall bounce), `MOTION_RECIPROCATING` (back-and-forth
+  between two points), `MOTION_SINUSOIDAL` (forward + sin-perp swing),
+  `MOTION_RANDOM_WALK` (velocity-noise process), `MOTION_STATIONARY`.
+- Each family fills an `ObstacleTrajectory` with waypoints sampled at 1 Hz
+  over 60 s — reuses existing collision / lidar / viz code unchanged.
+- Mixture sampler picks a family per obstacle from integer-weight Categorical.
+- Stress test: 5000 trajectories, equal weights, 100% generation success.
+
+Env config (`dyna_train.ini`):
+- Broadened ranges: `num_obstacles ∈ [3, 25]` (was 5-10), `speed ∈ [0.3,
+  2.5]` (was 0.5-1.0), `order ∈ [1, 5]` (was 1-2), `std ∈ [0, 0.3]`.
+- Family weights: all 6 equal.
+
+500M training run `1778780353488` completed in ~30 min, 250k SPS, 21 ckpts.
+
+**Important note on the eval results below: they're from the BROKEN eval
+geometry (see next entry). Don't take 31.5% on the same broken eval as a
+fair comparison to LfH-CP's 30.83%; user caught the eval mismatch right
+after this training finished.**
+
+---
+
+## 2026-05-14 — Eval-geometry correction (paper protocol)
+**Author:** Sudhir (with Claude)
+**Files touched:** dyna_eval/dyna_eval.h, dyna_eval/dyna_eval.c,
+                  dyna_eval/dyna_eval.ini, dyna_eval/binding.c,
+                  run_eval_published.sh, tools/eval_three.sh (new),
+                  exp_tracker.md, logger.md (this entry)
+**Commit:** uncommitted
+
+User flagged after watching the official DynaBARN demo videos: the eval
+spawn is OUTSIDE the room, the room is open on the +x side, and obstacles
+are already moving when the robot reaches the room mouth. Verified by
+cloning kevinhou912/ROS-Jackal-Data_Collection-Local and reading
+`dyna.launch` + `check_goal_node.py` directly.
+
+Ground-truth eval geometry vs our previous (wrong) assumption:
+
+| Field | Real | Our (broken) |
+|---|---|---|
+| Spawn | `(12, 0, yaw=π)` outside room, facing −x | `(0, 9, yaw=-π/2)` inside |
+| Goal | `(-9, 0)` | `(0, -9)` |
+| Arena walls | 3 (back, top, bottom). Open on +x. | 4 (closed box) |
+| Success | `\|Δx\|<0.3 AND \|Δy\|<0.3` (L∞ box) | Euclidean `d<0.5` |
+| Vel cap | `move_base max_vel_x=0.5` m/s | none (hardware 2.0) |
+
+Patched `dyna_eval`:
+- New constants: `EVAL_START_X=12, EVAL_START_Y=0, EVAL_START_TH=π`,
+  `EVAL_GOAL_X=-9, EVAL_GOAL_Y=0, EVAL_VMAX_MOVEBASE=0.5`.
+- New env knobs: `open_front` (1 = no +x wall), `v_max_clip` (cap policy v),
+  `goal_box_half` (L∞ half-extent; 0.3 by default).
+- `c_reset`: spawn at the new pose.
+- `c_step`: clip v_cmd before integration; clamp y always, clamp −x always,
+  clamp +x only if !open_front.
+- `wall_collision`: no longer flag +x escape when open_front.
+- Success criterion: L∞ box if `goal_box_half > 0`, else legacy Euclidean.
+- All new fields plumbed through binding.c and dyna_eval.ini defaults to
+  the corrected paper geometry.
+- `run_eval_published.sh`: new `OUT_DIR_TAG` env-var, defaults to
+  `eval_paper`, so corrected results don't collide with old broken ones.
+
+Re-evaluated all three checkpoints (see exp_tracker.md for full table):
+
+| Ckpt | Easy | Medium | Hard | Overall |
+|---|---|---|---|---|
+| 50M_poly  | 42.0% | 29.5% |  0.0% | 23.8% |
+| 500M_poly | 58.0% | 37.0% | 11.5% | 35.5% |
+| 500M_mix  | 63.0% | 44.0% |  5.0% | **37.3%** |
+
+Best is 500M_mix at 37.3% overall — still above LfH-CP 30.83% and
+Dyna-LfLH 22.5%, but dramatically lower than the broken-eval 75.5%. The
+broken eval was overstating by ~38 pp.
+
+Curious finding: 500M_mix is BETTER on easy/medium than 500M_poly, but
+WORSE on hard (5% vs 11.5%). Possible explanations:
+- Mix gets distracted by motion patterns the published worlds don't have.
+- Mix learned to be more cautious (e.g. more reverse), exceeding time budget
+  on hard worlds — but timeout rate is ~0% so this isn't time. More likely
+  it's collision-on-cautious-maneuver.
+
+Followups:
+- Decide whether to also patch dyna_train to match the paper geometry (fixed
+  spawn, fixed goal, 3-walled, fixed motion family if needed). See task #24
+  in the task list.
+- WebM-render hard-world failures for 500M_mix vs 500M_poly to find the
+  collision modes.

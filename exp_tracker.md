@@ -298,3 +298,81 @@ All 20 easy worlds + ~85% of medium + 35% of hard fully solved.
 - [ ] L=5 history-stacked LiDAR scans — should help with predicting fast
       obstacle motion that's currently causing the hard-bin collisions.
 - [ ] Sim-to-sim deployment in Gazebo for honest SOTA comparison.
+
+---
+
+## **CORRECTION 2026-05-14: previous eval geometry was wrong**
+
+User caught it by watching the official DynaBARN demo videos. We had wrongly
+assumed the eval setup was "spawn (0, 9) → goal (0, -9) in a 4-walled box."
+
+**Ground truth** (from kevinhou912/ROS-Jackal-Data_Collection-Local launch
+files):
+
+| Field | Real | Our (broken) | Fix |
+|---|---|---|---|
+| Spawn pose | `(12, 0, yaw=π)` outside the room | `(0, 9, yaw=-π/2)` inside | patched |
+| Goal | `(-9, 0)` near back wall | `(0, -9)` south wall | patched |
+| Arena | 3-walled (open on +x) | 4-walled box | patched (`open_front=1`) |
+| Success | L∞ box \|Δx\|<0.3 ∧ \|Δy\|<0.3 | Euclidean d<0.5 | patched (`goal_box_half=0.3`) |
+| Velocity cap | move_base local planner `max_vel_x=0.5` m/s | none (hardware 2.0) | patched (`v_max_clip=0.5`) |
+| Time sync | Obstacles already moving when robot spawns at (12,0). Robot needs ~4-5s to traverse to room mouth at x=10. | Robot+obstacles both at rest at t=0 | implicit (robot needs time to reach room anyway) |
+
+Sources verified:
+- `kevinhou912/ROS-Jackal-Data_Collection-Local/src/jackal_simulator/jackal_gazebo/launch/dyna.launch`
+  → `<arg name="x" value="12.0" /> <arg name="y" value="0.0" /> <arg name="yaw" value="3.14159265359" />`
+- `…/worlds/dyna_world_files/world_*.world` → all 60 worlds:
+  `<model name="goal"><pose>-9.00000 0.000000 …</pose>`
+- `…/src/additional_pkg/src/check_goal_node.py:arrival_gaol` →
+  `abs(jackal_x - goal_x) < 0.3 and abs(jackal_y - goal_y) < 0.3`
+- `…/src/jackal/jackal_navigation/params/base_local_planner_params.yaml` →
+  `max_vel_x: 0.5`
+- `external/DynaBARN/DynaBARN_worlds_60/world_*.world` → only `back_wall`,
+  `top_wall`, `bottom_wall` defined; no `front_wall`.
+
+### Re-eval of all three checkpoints under corrected geometry
+
+Same 60 published DynaBARN worlds. Eval: 60 worlds × 10 trials each = 600
+trials per checkpoint. New eval output dir: `<run>/eval_paper/<ckpt>/`.
+
+| Ckpt | Training distribution | Easy | Medium | Hard | **Overall** |
+|---|---|---|---|---|---|
+| 50M_poly  | poly easy-bin only | 42.0% | 29.5% |  0.0% | **23.8%** |
+| 500M_poly | poly easy-bin only | 58.0% | 37.0% | 11.5% | **35.5%** |
+| 500M_mix  | 6-family mixture   | 63.0% | 44.0% |  5.0% | **37.3%** |
+| **Dyna-LfLH** (2024, paper baseline) | — | — | — | — | 22.5% |
+| **LfH-CP**  (2025, prior SOTA)       | — | — | — | — | 30.83% |
+
+Best so far: **500M motion-mix at 37.3% overall** — still ~6.5 pp above
+LfH-CP and ~15 pp above Dyna-LfLH, but **dramatically** less than the
+broken-eval 75.5%. The previous result was overstating by ~38 pp due to:
+- Wrong start position (already inside the room vs entering from outside).
+- Wrong velocity cap (2 m/s vs 0.5 m/s).
+- Wrong success criterion (Euclidean 0.5 m vs L∞ box 0.3 m).
+- Robot+obstacle desync (we synced; reality has obstacles already moving).
+
+### Per-bin observations on corrected eval
+
+- **Easy** (worlds 0–19): 500M_mix beats 500M_poly (63% vs 58%) — the broader
+  training distribution generalises to easy-bin published worlds better.
+- **Medium** (worlds 20–39): same pattern (44% vs 37%) — mix wins.
+- **Hard** (worlds 40–59): **poly beats mix** (11.5% vs 5%). Counter-
+  intuitive but suggests motion-mix's gains on easy/medium come at the cost
+  of forgetting some specific polynomial-fit-trajectory patterns that the
+  hard bin emphasises. Or: motion-mix policy is more cautious in dense
+  clutter (more reverse), trading speed for safety, and exceeding the time
+  budget on hard worlds. Worth investigating via failure-mode WebMs.
+- Zero timeouts across all 3 ckpts on easy/medium; hard has 0–1% timeouts.
+  Failures are almost entirely collisions, not running out of time.
+
+### Followup (updated post-correction)
+
+- [ ] WebM-render the 500M_mix vs 500M_poly trajectories on the 10 hardest
+      worlds side by side to see *why* mix fails where poly succeeds.
+- [ ] Decide on `dyna_train` geometry: should we make training match the
+      eval (fixed spawn (12,0), fixed goal (-9,0), 3-walled room)? Open
+      design question — see followup task #24.
+- [ ] Once train env is decided, re-train and target ≥ 50% overall on
+      corrected eval.
+- [ ] Eval at v_max=2.0 (no clip) for honest "what our policy can actually
+      do" number. Headline 37.3% is the constrained-to-paper number.

@@ -30,10 +30,21 @@
 #define DEFAULT_ARENA_SIZE 20.0f
 #define DEFAULT_MAX_STEPS 600
 
-#define EVAL_START_X  0.0f
-#define EVAL_START_Y  9.0f       // Paper says (0, 11) but arena is [-10, 10]² — clamp to 9 so robot footprint fits inside the wall.
-#define EVAL_GOAL_X   0.0f
-#define EVAL_GOAL_Y  -9.0f
+// CORRECTED 2026-05-14 (was previously (0,9) → (0,-9) inside a 4-walled box,
+// based on a misread of the paper text). Ground truth from the launch file
+// dyna.launch + dyna_world_files/world_*.world model name="goal":
+//   spawn: x=12, y=0, yaw=π   (outside the room, 2 m east of the +x opening)
+//   goal : x=-9, y=0          (inside the room, near the back wall)
+//   room : 3-walled at x=-10, y=+10, y=-10. Open on +x.
+//   success: |Δx|<0.3 AND |Δy|<0.3  (L∞ box; check_goal_node.py:arrival_gaol)
+//   eval-time velocity cap: v_x ∈ [-0.5, 0.5] m/s  (move_base local planner;
+//     base_local_planner_params.yaml max_vel_x = 0.5)
+#define EVAL_START_X  12.0f
+#define EVAL_START_Y   0.0f
+#define EVAL_START_TH  ((float)M_PI)    // facing −x (into the open mouth)
+#define EVAL_GOAL_X   -9.0f
+#define EVAL_GOAL_Y    0.0f
+#define EVAL_VMAX_MOVEBASE 0.5f         // paper's move_base local planner cap
 
 #define WIDTH 720
 #define HEIGHT 720
@@ -109,7 +120,11 @@ typedef struct {
     int   world_seed_base;       // ≥0 → deterministic; <0 → use rng directly
     float gamma_d, beta, sigma_o;
     float success_bonus, collision_penalty;
-    float goal_radius;
+    float goal_radius;            // (kept for back-compat; success uses L∞ box now)
+    // Corrected-eval-geometry knobs (default = real-paper setup):
+    int   open_front;             // 1 = no wall on +x side (real eval); 0 = closed box
+    float v_max_clip;             // clamp policy v output to ±this. 0 → uncapped.
+    float goal_box_half;           // L∞ "box" half-extent for success (paper: 0.3)
 
     // Baked-world override. If world_file_set != 0, c_reset loads the
     // trajectories from `world_file_path` and bypasses traj_gen.
@@ -138,7 +153,12 @@ static inline bool obstacle_collision(const DynaEval* env) {
 
 static inline bool wall_collision(const DynaEval* env) {
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    return fabsf(env->robot.x) > half || fabsf(env->robot.y) > half;
+    // y-side walls + back wall (−x). +x wall absent if open_front.
+    if (env->robot.y >  half) return true;
+    if (env->robot.y < -half) return true;
+    if (env->robot.x < -half) return true;
+    if (!env->open_front && env->robot.x > half) return true;
+    return false;
 }
 
 static inline float closest_obstacle_dist(const DynaEval* env) {
@@ -208,7 +228,7 @@ void c_reset(DynaEval* env) {
     env->episode_return = 0.0f;
     env->robot.x = EVAL_START_X;
     env->robot.y = EVAL_START_Y;
-    env->robot.theta = -0.5f * (float)M_PI;   // facing −y, toward the goal
+    env->robot.theta = EVAL_START_TH;   // facing −x, into the room's +x opening
     env->robot.v = 0.0f;
     env->robot.w = 0.0f;
     env->goal_x = EVAL_GOAL_X;
@@ -268,11 +288,17 @@ void c_step(DynaEval* env) {
     a1 = clampf(a1, -1.0f, 1.0f);
     float v_cmd = JACKAL_V_MIN + 0.5f * (a0 + 1.0f) * (JACKAL_V_MAX - JACKAL_V_MIN);
     float w_cmd = a1 * JACKAL_W_MAX;
+    // Apply optional eval-time velocity cap (paper move_base cap = 0.5 m/s).
+    if (env->v_max_clip > 0.0f) {
+        v_cmd = clampf(v_cmd, -env->v_max_clip, env->v_max_clip);
+    }
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    env->robot.x = clampf(env->robot.x, -half, half);
+    // Clamp y (always walled). Clamp −x (back wall). +x: only if closed box.
     env->robot.y = clampf(env->robot.y, -half, half);
+    if (env->robot.x < -half) env->robot.x = -half;
+    if (!env->open_front && env->robot.x > half) env->robot.x = half;
 
     update_obstacles(env);
 
@@ -284,7 +310,16 @@ void c_step(DynaEval* env) {
         r -= env->beta * expf(-(d_obs * d_obs) / sig2);
     }
 
-    bool reached = (dist < env->goal_radius);
+    // Success: L∞ box of half-extent `goal_box_half` around the goal
+    // (matches the paper eval pipeline; check_goal_node.py:arrival_gaol).
+    // Falls back to the legacy Euclidean test if `goal_box_half` is 0.
+    bool reached;
+    if (env->goal_box_half > 0.0f) {
+        reached = fabsf(env->robot.x - env->goal_x) < env->goal_box_half
+               && fabsf(env->robot.y - env->goal_y) < env->goal_box_half;
+    } else {
+        reached = (dist < env->goal_radius);
+    }
     bool collided = obstacle_collision(env) || wall_collision(env);
     bool truncated = (env->tick >= env->max_steps);
     if (reached) r += env->success_bonus;
