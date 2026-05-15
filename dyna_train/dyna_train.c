@@ -42,8 +42,11 @@ static DynaTrain make_env(unsigned int seed,
         .beta = 1.0f,
         .sigma_o = 2.0f,
         .success_bonus = 1.0f,
-        .collision_penalty = 10.0f,
+        .collision_penalty = 1.0f,
         .goal_radius = goal_radius,
+        // Reward extensions — see dyna_train.h.
+        .time_penalty = 0.005f,
+        .alpha_g = 0.05f, .sigma_g = 5.0f,
         .rng = seed,
         // Motion-family defaults: poly-only, matching the historical config.
         .mw_poly = 1, .mw_linear = 0, .mw_reciprocating = 0,

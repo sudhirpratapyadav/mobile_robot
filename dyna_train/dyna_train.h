@@ -111,6 +111,18 @@ typedef struct {
     float success_bonus;
     float collision_penalty;
     float goal_radius;
+    // Reward extensions (added 2026-05-15 to fix the "do-nothing" collapse
+    // observed in the 5B run with v_max=0.5 + accel limits).
+    //   time_penalty:  constant -ve reward per step. Breaks the symmetry
+    //                  where doing-nothing earns 0 vs. moving-might-collide
+    //                  earns negative.
+    //   alpha_g, sigma_g: goal-attraction Gaussian. Adds
+    //     +alpha_g · exp(-d_goal² / sigma_g²) per step.
+    //     Closer-to-goal is strictly preferred even when stationary.
+    //   Set time_penalty / alpha_g to 0 to disable.
+    float time_penalty;
+    float alpha_g;
+    float sigma_g;
 
     // Motion-family mixture (each weight is sampled uniformly from a Categorical)
     int   mw_poly, mw_linear, mw_reciprocating, mw_sinusoidal, mw_random_walk, mw_stationary;
@@ -364,6 +376,16 @@ void c_step(DynaTrain* env) {
     if (d_obs < 1e3f) {
         float sig2 = env->sigma_o * env->sigma_o;
         r -= env->beta * expf(-(d_obs * d_obs) / sig2);
+    }
+    // Goal-attraction Gaussian — peak at goal, ~0 far away. Breaks the
+    // do-nothing symmetry in tandem with the time penalty.
+    if (env->alpha_g > 0.0f && env->sigma_g > 0.0f) {
+        float sg2 = env->sigma_g * env->sigma_g;
+        r += env->alpha_g * expf(-(dist * dist) / sg2);
+    }
+    // Per-step time penalty.
+    if (env->time_penalty > 0.0f) {
+        r -= env->time_penalty;
     }
 
     bool reached = (dist < env->goal_radius);

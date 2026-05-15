@@ -43,6 +43,9 @@ void my_init(Env* env, Dict* kwargs) {
     env->train_w_max        = dict_get(kwargs, "train_w_max")->value;
     env->train_a_max        = dict_get(kwargs, "train_a_max")->value;
     env->train_alpha_max    = dict_get(kwargs, "train_alpha_max")->value;
+    env->time_penalty       = dict_get(kwargs, "time_penalty")->value;
+    env->alpha_g            = dict_get(kwargs, "alpha_g")->value;
+    env->sigma_g            = dict_get(kwargs, "sigma_g")->value;
     init(env);
 }
 
