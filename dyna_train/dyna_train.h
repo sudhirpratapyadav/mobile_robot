@@ -42,9 +42,21 @@
 #include "../shared/lidar.h"
 #include "../shared/traj_gen.h"
 #include "../shared/motion.h"
+#include "../shared/costmap.h"
 
 #define MAX_OBSTACLES 30
-#define OBS_DIM (LIDAR_BEAMS + 2)            // 720 + (goal_dx_body, goal_dy_body)
+// Observation mode — pick at compile time. To switch, change this define and
+// rebuild (bash build.sh dyna_train + bash build.sh dyna_train --fast).
+//   OBS_MODE_COSTMAP = 0 → 720-d LiDAR + (v, w, goal_dx_body, goal_dy_body)
+//   OBS_MODE_COSTMAP = 1 → 64×64 body-frame costmap + (v, w, goal_dx_body, goal_dy_body)
+#define OBS_MODE_COSTMAP 1
+#if OBS_MODE_COSTMAP
+#  define OBS_EXTRA 4   // (v, w, goal_dx_body, goal_dy_body)
+#  define OBS_DIM (COSTMAP_SIZE + OBS_EXTRA)
+#else
+#  define OBS_EXTRA 4
+#  define OBS_DIM (LIDAR_BEAMS + OBS_EXTRA)
+#endif
 #define COLLISION_DIST (JACKAL_RADIUS + OBSTACLE_RADIUS)   // 0.30 + 0.5 = 0.80 m
 #define DEFAULT_ARENA_SIZE 20.0f
 #define DEFAULT_MAX_STEPS 600
@@ -194,19 +206,33 @@ static inline void update_obstacles(DynaTrain* env) {
 }
 
 static inline void compute_obs(DynaTrain* env) {
+    // Always compute the LiDAR scan first — needed by the costmap path too,
+    // and the standalone driver may render it. Cheap.
     float ranges[LIDAR_BEAMS];
     lidar_scan(&env->robot, 0.5f * env->arena_size,
                env->obs_x, env->obs_y, env->num_obstacles, ranges);
-    // Normalize to [0, 1] by max range — keeps obs scale bounded.
+
+#if OBS_MODE_COSTMAP
+    // Egocentric occupancy grid (LingBot-style explicit-geometry obs).
+    costmap_rasterize(ranges, env->observations);
+    int extras_off = COSTMAP_SIZE;
+#else
+    // Raw normalized LiDAR scan.
     for (int i = 0; i < LIDAR_BEAMS; i++) {
         env->observations[i] = ranges[i] / LIDAR_RANGE;
     }
+    int extras_off = LIDAR_BEAMS;
+#endif
+
+    // Common extras: ego (v, w) and goal vector in body frame.
     float gx_b, gy_b;
     to_body_frame(env->goal_x - env->robot.x,
                   env->goal_y - env->robot.y,
                   env->robot.theta, &gx_b, &gy_b);
-    env->observations[LIDAR_BEAMS]     = gx_b;
-    env->observations[LIDAR_BEAMS + 1] = gy_b;
+    env->observations[extras_off + 0] = env->robot.v;
+    env->observations[extras_off + 1] = env->robot.w;
+    env->observations[extras_off + 2] = gx_b;
+    env->observations[extras_off + 3] = gy_b;
 }
 
 // Sample a valid start/goal pair that:
