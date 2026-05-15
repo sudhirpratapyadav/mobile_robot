@@ -461,3 +461,34 @@ Existing-ckpt sanity numbers (corrected geometry + accel-capped eval):
 Poly loses on hard (snap-maneuvers were helping); mix gains on easy/medium
 (smoother control under the cap). Retraining with the cap should fix both
 sides.
+
+---
+
+## 2026-05-15 — 5B poly retrain with accel limits — COLLAPSED
+**Author:** Sudhir (with Claude)
+**Files touched:** dyna_train/dyna_train.ini (motion-mix → poly-only);
+                  exp_tracker.md, logger.md
+**Commit:** training launched at `c23c592`; ckpts in
+            `runs/train/dyna_train/b3vm6fej/`
+
+Per user: train 5B steps poly-only with the new physics (v_max=0.5,
+a_max=10, alpha_max=20), wandb logging on. Trained ~5h 45m, 192 ckpts,
+final at 5B. wandb run id b3vm6fej.
+
+Result: **0% success across all evaluated checkpoints** (0M, 1.2B, 2.5B,
+3.75B, 5B). After ~1B steps the policy collapsed into a "do nothing"
+attractor — collision rate dropped 56% → 0%, but timeout rate went to
+100%. Final policy entropy = 62.8 (action-dim std ~3M, mean ~0). Slew-rate
+cap converts the huge noise into ~0 net displacement.
+
+Likely cause: collision_penalty=10 dominates the per-step Δ-distance
+shaping (~0.1 max). Once the policy learns moving = collision = -10,
+not-moving (zero Δ-distance reward) is strictly better. With v_max=2.0 and
+no accel cap (previous 500M training), the policy could "hop" through
+near-misses and discover the goal. With v_max=0.5 + slew-rate cap, the
+do-nothing local optimum has no escape.
+
+This isn't a 5B-vs-500M issue — it's a reward-design issue triggered by
+the new kinematic envelope. Followups in exp_tracker.md (reduce
+collision_penalty, add per-step time penalty, add goal-attraction Gaussian,
+consider warmstart from 500M_poly).

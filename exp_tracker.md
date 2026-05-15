@@ -404,3 +404,70 @@ Eval with accel limits at deploy:
       ≥ 50% overall.
 - [ ] Eval at v_max=2.0 (no clip) for honest "what our policy can actually
       do" number. Headline 38.8% is the constrained-to-paper number.
+
+---
+
+### `b3vm6fej` — 5B poly with v_max=0.5 + accel limits — **COLLAPSED**
+
+**Trained:** 2026-05-14 18:53 → 2026-05-15 ~00:35 (~5h 45m on single GPU)
+**Branch / commit:** `c23c592` (.ini at this commit)
+**Hypothesis:** Train under the same kinematic envelope as the paper eval
+(v∈[-0.5,0.5], a_max=10, alpha_max=20). Train 10× longer than 500M to
+saturate. Expected ≥ 50% overall on corrected eval.
+**wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/b3vm6fej
+**192 ckpts** saved.
+
+**Result (corrected eval, 600 trials per ckpt):**
+
+| Ckpt step | Success | Collision | Timeout |
+|---|---|---|---|
+| 0M (untrained init) | 0.0% | 56% | 44% |
+| 1.2B | 0.0% | **0%** | **100%** |
+| 2.5B | 0.0% | 0% | 100% |
+| 3.75B | 0.0% | 0% | 100% |
+| 5B | 0.0% | 0% | 100% |
+
+**Failure mode: policy collapsed into a "do nothing" attractor.** From the
+final dashboard:
+- `success = 0`, `collision = 0.79`, `timeout = 0.21` (training-distribution
+  random-start; lots of collisions still happen because the random spawn
+  occasionally drops the robot near an obstacle, but the robot itself
+  doesn't move).
+- **`entropy = 62.838`** for a 2-D continuous Gaussian → each action-dim
+  std ~exp(15) ≈ 3·10⁶. Effectively pure-noise actions, mean ~0.
+- The slew-rate cap turns "huge-noise mean-zero actions" into "very small
+  net displacement" — robot wanders microscopically and runs out the
+  60-second clock.
+
+**Why probably:** combination of:
+1. **Collision penalty too high** (10) relative to per-step shaping reward
+   (~0.1 max). Once the policy learns "moving fast = collision = -10",
+   it's far more attractive to stop than to risk a collision.
+2. **Slew-rate cap closed the escape hatch.** The previous 500M (no accel
+   limits) policy could compensate with snap maneuvers when stuck;
+   without that, the do-nothing local optimum dominates.
+3. **No goal-attraction term**, only Δ-distance shaping. Δ-distance
+   integrated to zero over a stationary trajectory — the policy gets ZERO
+   for sitting still, which is a strict improvement over -10 for moving
+   into a collision. A goal-radius Gaussian or constant time penalty would
+   break the symmetry.
+
+**Conclusion:** scaling to 5B with the kinematically-correct envelope
+*and* the existing reward design produces collapse, not improvement.
+The reward design needs to tip the balance against "do nothing" before
+adding back kinematic realism.
+
+**Followup (next training run):**
+- [ ] Reduce `collision_penalty` from 10 → 1 (or 0.5). Should make moving
+      slightly net-positive even if it occasionally collides.
+- [ ] Add a small **per-step time penalty** (e.g. -0.01) so doing-nothing
+      isn't free.
+- [ ] Add a **goal-attraction Gaussian** term (e.g. `+α·exp(-d²/σ_g²)`,
+      σ_g = 5 m, α = 0.05) so being closer to the goal beats being far.
+- [ ] Consider warmstarting from the 500M_poly ckpt (which works) instead
+      of from a random init — this might avoid the early-collapse trap.
+- [ ] Decide whether 5B was even the right budget — 500M without accel
+      limits gave 35.5%. With accel limits added (eval-only), same ckpt
+      gave 33.3%. The "right" comparison is 500M with accel limits at
+      train AND eval. We jumped to 5B which made the collapse much more
+      severe.
