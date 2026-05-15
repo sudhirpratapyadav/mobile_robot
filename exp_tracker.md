@@ -458,12 +458,13 @@ The reward design needs to tip the balance against "do nothing" before
 adding back kinematic realism.
 
 **Followup (next training run):**
-- [ ] Reduce `collision_penalty` from 10 → 1 (or 0.5). Should make moving
+- [x] Reduce `collision_penalty` from 10 → 1 (or 0.5). Should make moving
       slightly net-positive even if it occasionally collides.
-- [ ] Add a small **per-step time penalty** (e.g. -0.01) so doing-nothing
+- [x] Add a small **per-step time penalty** (e.g. -0.01) so doing-nothing
       isn't free.
-- [ ] Add a **goal-attraction Gaussian** term (e.g. `+α·exp(-d²/σ_g²)`,
+- [x] Add a **goal-attraction Gaussian** term (e.g. `+α·exp(-d²/σ_g²)`,
       σ_g = 5 m, α = 0.05) so being closer to the goal beats being far.
+      (All three tried together as "option C" in run `ukwnlxj3` below.)
 - [ ] Consider warmstarting from the 500M_poly ckpt (which works) instead
       of from a random init — this might avoid the early-collapse trap.
 - [ ] Decide whether 5B was even the right budget — 500M without accel
@@ -471,3 +472,86 @@ adding back kinematic realism.
       gave 33.3%. The "right" comparison is 500M with accel limits at
       train AND eval. We jumped to 5B which made the collapse much more
       severe.
+
+---
+
+### `ukwnlxj3` — 100M option-C reward (collision↓ + time penalty + goal-attr)
+
+**Trained:** 2026-05-15 05:58 → 06:05 (~7 min)
+**Branch / commit:** `ef867de`
+**Hypothesis:** The 5B collapse was a reward-design issue, not a budget
+issue. Lower collision_penalty + add per-step time penalty + add
+goal-attraction Gaussian should break the do-nothing attractor and let
+PPO learn even at v_max=0.5 + accel limits.
+**Config delta vs 5B (b3vm6fej):** identical except:
+- `collision_penalty`: 10 → 1
+- `time_penalty`: 0 → 0.005
+- `alpha_g, sigma_g`: (none) → 0.05, 5.0
+- `total_timesteps`: 5B → 100M (per user "100M each per variant")
+
+**wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/ukwnlxj3
+Group: `rewardC`. Tag: `poly_v05_accel_rewardC_100M`.
+
+**Result (final dashboard, in-distribution random-start training env):**
+- success = 10.7% (was 0% on 5B run!)
+- collision = 87.7%
+- timeout = 1.7%
+- entropy = 5.78  (was 62.8 — sanity restored)
+
+**Result (corrected eval, 600 trials per ckpt):**
+
+| Bin    | Success | Collision | Timeout |
+|--------|---------|-----------|---------|
+| Easy   | 40.0%   | 60.0%     | 0.0%    |
+| Medium | 16.0%   | 84.0%     | 0.0%    |
+| Hard   | 6.5%    | 93.5%     | 0.0%    |
+| **Overall** | **20.8%** | — | — |
+
+**Comparison:**
+
+| Run | Steps | v_max | accel | Reward | Overall |
+|---|---|---|---|---|---|
+| 5B poly | 5B | 0.5 | yes | original | **0.0% (collapsed)** |
+| 100M poly option-C | 100M | 0.5 | yes | option C | **20.8%** |
+| 500M poly old | 500M | 2.0 | no | original | 35.5% (eval_paper) |
+| 500M poly old + eval-accel | 500M | 2.0 | no | original | 33.3% (eval_paper_accel) |
+| 500M mix old + eval-accel | 500M | 2.0 | no | original | 38.8% (eval_paper_accel) |
+| Dyna-LfLH (paper) | n/a | n/a | n/a | n/a | 22.5% |
+| LfH-CP (paper) | n/a | n/a | n/a | n/a | 30.83% |
+
+**Observations:**
+1. Reward overhaul worked — policy no longer collapsed. Entropy back to
+   sane (5.8 vs 62.8). Robot is moving and trying (88% collisions = lots
+   of attempts; only 0% timeouts means decisive episodes either way).
+2. At 100M with the tighter envelope (v=0.5 + accel), the policy already
+   reaches **20.8%**, ~Dyna-LfLH-equivalent. With 5–10× more training
+   it should comfortably pass LfH-CP's 30.83%.
+3. The "old" 500M ckpts get higher *headline* numbers because they trained
+   with v_max=2.0 (4× faster movement allows hop-through-gap exploration).
+   This is comparing apples to oranges — they're not paper-comparable
+   under the corrected eval. The 100M option-C number is the first
+   honest baseline under the full paper kinematic envelope.
+4. Per-bin: easy/medium drop is dramatic (40 vs 58, 16 vs 37 vs old
+   500M). Hard is similar (6.5 vs 11.5). The slow envelope is
+   particularly punishing on the easy bin where the policy used to glide
+   through fast — now it has to creep, and time runs out *or* a slow
+   collision happens.
+5. **0% timeouts** is odd — at 100M the policy is decisive (always reaches
+   goal or collides). This suggests it hasn't yet learned cautious
+   behaviour; it commits to a path and either wins or hits something.
+   Longer training should grow caution.
+
+**Conclusion:** option-C reward is the right baseline under the corrected
+kinematic envelope. The headline 20.8% at 100M is honest and roughly at
+Dyna-LfLH parity. Need to scale to find the ceiling.
+
+**Followup:**
+- [ ] Scale option-C to 500M and 1B; track whether 20.8 → 35+ → 45+.
+- [ ] If scaling plateaus low, ablate the three reward terms individually
+      to find which is helping most.
+- [ ] Experiment per user's plan: "100M each per variant; scale only what
+      works." Other 100M variants worth trying:
+        - just lowered collision_penalty (no time or goal-attr)
+        - just goal-attraction (no time penalty)
+        - warmstart from 500M_poly under new envelope
+        - LfH-CP-style observation: stack 5 history scans
