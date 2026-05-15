@@ -546,7 +546,7 @@ kinematic envelope. The headline 20.8% at 100M is honest and roughly at
 Dyna-LfLH parity. Need to scale to find the ceiling.
 
 **Followup:**
-- [ ] Scale option-C to 500M and 1B; track whether 20.8 → 35+ → 45+.
+- [x] Scale option-C — see `v6r7zeja` below: collapsed at 500M.
 - [ ] If scaling plateaus low, ablate the three reward terms individually
       to find which is helping most.
 - [ ] Experiment per user's plan: "100M each per variant; scale only what
@@ -555,3 +555,79 @@ Dyna-LfLH parity. Need to scale to find the ceiling.
         - just goal-attraction (no time penalty)
         - warmstart from 500M_poly under new envelope
         - LfH-CP-style observation: stack 5 history scans
+
+---
+
+### `v6r7zeja` — 500M costmap obs (G1) + option-C reward — **COLLAPSED**
+
+**Trained:** 2026-05-15 ~07:30 → 08:18 (~48 min, 21 ckpts)
+**Branch / commit:** `a877a1e`
+**Hypothesis:** explicit 64×64 body-frame occupancy grid + small CNN beats
+raw 720-d LiDAR + MLP under the same training budget. LingBot-Map's
+"explicit-geometry + learned ops" philosophy.
+**Config delta vs `ukwnlxj3`:**
+- `OBS_MODE_COSTMAP = 1`     (compile-time)
+- obs: 720+2 → 64*64+4 = 4100 floats
+- added (v, w) to obs alongside the goal (option A2)
+- torch.encoder = `CostmapEncoder64` (3-conv → flatten → concat extras → MLP)
+- ~191k params → ~624k params
+- `total_timesteps`: 100M → 500M (per user "for CNN, can run longer")
+
+**wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/v6r7zeja
+Group: `costmap_v05_accel_rewardC`. Tag: `costmap_v05_accel_rewardC_500M`.
+
+**Result (corrected eval, 60×2 trials per ckpt):**
+
+| Step | Success | Collision | Timeout | Note |
+|---|---|---|---|---|
+| 0M       | 0% | 0%   | 100% | untrained init |
+| 100M     | 0% | 18%  | 82%  | starts moving |
+| 240M     | 0% | 27%  | 73%  | **peak activity** |
+| 370M     | 0% | 5%   | 95%  | collapsing |
+| 500M     | 0% | 0%   | 100% | **fully collapsed** |
+
+Final dashboard: entropy = **18.6** (action stds ~exp(7) ≈ 1100), success
+= 0%. Same do-nothing-attractor failure mode as the 5B lidar run, just
+slower to fully converge.
+
+**Key takeaway: option-C reward isn't enough at long training horizons.**
+It worked at 100M for the lidar variant (20.8%) because the policy was
+still in "explore + move" phase. As PPO continues, the value function
+learns "do-nothing = predictable -3, moving = high-variance risk" and
+entropy bonus widens the policy until it effectively stops moving.
+
+**The collapse is reward-mediated, not architecture-mediated.** Both the
+MLP-on-lidar (5B run b3vm6fej) and CNN-on-costmap (this run) collapsed
+under prolonged training. The CNN run shows it more dramatically because
+we can see the full progression: peak around 240M, then slow decay.
+
+**Why option-C wasn't enough:**
+1. Time penalty (-3 over 600 steps) is bounded; the agent absorbs it
+   once and stops trying.
+2. Goal-attraction Gaussian peaks at +0.05 over 600 steps = +30 max if
+   you sit on top of the goal — but you can't get there without moving,
+   and moving is risky. If the random spawn is far from the goal,
+   alpha_g·exp(-d²/σ²) ≈ 0 anyway → no draw.
+3. Collision_penalty=1 is still negative; the value function correctly
+   estimates "moving = expected -1 to -10 over the future" vs
+   "stationary = expected -3 minus a small goal-attr". Stationary wins.
+
+**Next experiments (real ones this time):**
+- [ ] Don't trust 100M numbers — scale matters. Either run all variants
+      to 500M+ or accept 100M is just a smoke test.
+- [ ] Scale `time_penalty` linearly with `collision_penalty`. Try
+      `time_penalty=0.05` (vs current 0.005) so doing-nothing costs
+      -30 over an episode, comparable to a couple of collisions.
+- [ ] Or **shape progress over the entire horizon** — replace the
+      Δ-distance (Markov) reward with a reward proportional to
+      `(initial_dist - current_dist) / horizon` so the agent gets credit
+      for *being closer* to the goal than at start, regardless of how
+      it moves.
+- [ ] Or **make the goal-attraction stronger and wider** (`alpha_g=0.5,
+      sigma_g=15`) so even from across the arena there's a non-trivial
+      gradient pulling toward the goal.
+- [ ] Or **warmstart from a working ckpt** (e.g. the 100M `ukwnlxj3`
+      lidar option-C @ 20.8%) so we don't pass through the do-nothing
+      basin during PPO's value-learning phase.
+- [ ] Inspect the wandb curves of `v6r7zeja` to see exactly when
+      entropy started growing — that's the symptom we need to suppress.

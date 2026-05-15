@@ -352,6 +352,12 @@ frame. Speed > fidelity for the dirty version.
 
 | Run | Variant | Steps | Overall (eval_paper) |
 |---|---|---|---|
-| `b3vm6fej` | poly + v0.5 + accel + old reward | 5B | **0.0% (collapsed)** |
-| `ukwnlxj3` | poly + v0.5 + accel + option-C reward | 100M | **20.8%** |
-| TBD | G1 single-step costmap | 100M | TBD |
+| `b3vm6fej` | poly + v0.5 + accel + old reward (lidar/MLP) | 5B | **0.0% (collapsed)** |
+| `ukwnlxj3` | poly + v0.5 + accel + option-C reward (lidar/MLP) | 100M | **20.8%** |
+| `v6r7zeja` | + costmap obs + small CNN (G1) | 500M | **0.0% (collapsed)** |
+
+The 500M G1 result confirms the collapse is **reward-mediated, not
+observation-mediated**. The CNN-on-costmap policy went through the same
+do-nothing-attractor failure mode as the 5B lidar/MLP run, just slower:
+peak activity ~240M, fully collapsed by 500M. So before testing more
+representations we need a reward that doesn't reward stillness.
