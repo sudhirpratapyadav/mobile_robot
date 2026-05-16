@@ -77,6 +77,8 @@ typedef struct {
     float episode_return;
     float episode_length;
     float success;             // ratio of episodes that ever touched the goal
+    float success_strict;      // reached AND zero collisions in the whole episode
+    float success_clean_reach; // reached AND no collisions BEFORE first goal touch
     float collision;           // ratio of episodes with at least one collision
     float timeout;             // 1 − success when no early termination
     float n;
@@ -164,6 +166,7 @@ typedef struct {
     bool  reached_once;
     bool  was_in_collision;     // edge-detect for per-event collision penalty
     bool  collided_once;
+    bool  collided_before_reach;  // set if a collision happens before reached_once flips
     // Per-episode trackers for the new telemetry log channels.
     float ep_min_dist;          // min(dist) ever seen this episode
     float ep_min_obs_dist;      // min(closest_obstacle_dist) this episode
@@ -322,6 +325,7 @@ void c_reset(DynaTrain* env) {
     env->reached_once = false;
     env->was_in_collision = false;
     env->collided_once = false;
+    env->collided_before_reach = false;
     env->ep_min_dist = 1e9f;
     env->ep_min_obs_dist = 1e9f;
     env->ep_n_collision_events = 0;
@@ -343,6 +347,7 @@ void c_reset(DynaTrain* env) {
 
     // Build per-episode MotionParams + family weights from env config.
     MotionParams mp = motion_default_params();
+    mp.arena_half           = 0.5f * env->arena_size;
     mp.speed_min            = env->speed_min;
     mp.speed_max            = env->speed_max;
     mp.order_min            = env->order_min;
@@ -354,6 +359,9 @@ void c_reset(DynaTrain* env) {
     mp.freq_max             = env->freq_max;
     mp.walk_step_std        = env->walk_step_std;
     mp.reciprocate_min_dist = env->reciprocate_min_dist;
+    mp.init_min_dist_from_robot = 1.0f;   // reject obstacles within 1 m of spawn
+    mp.robot_x              = env->robot.x;
+    mp.robot_y              = env->robot.y;
 
     int weights[MOTION_FAMILY_COUNT] = {
         env->mw_poly,
@@ -503,6 +511,7 @@ void c_step(DynaTrain* env) {
     // transitions from non-collision to collision.
     if (collided_now && !env->was_in_collision) {
         env->collided_once = true;
+        if (!env->reached_once) env->collided_before_reach = true;
         env->ep_n_collision_events++;
         if (env->collision_penalty > 0.0f) {
             r -= env->collision_penalty;
@@ -532,10 +541,14 @@ void c_step(DynaTrain* env) {
         // Logging uses the latched per-episode flags so success/collision
         // counts are meaningful even when termination is off (every
         // episode then ends via truncation).
-        env->log.perf            += env->reached_once ? 1.0f : 0.0f;
-        env->log.success         += env->reached_once ? 1.0f : 0.0f;
-        env->log.collision       += env->collided_once ? 1.0f : 0.0f;
-        env->log.timeout         += (truncated && !env->reached_once && !ends_on_collision) ? 1.0f : 0.0f;
+        bool succ_strict   = env->reached_once && !env->collided_once;
+        bool succ_clean    = env->reached_once && !env->collided_before_reach;
+        env->log.perf               += env->reached_once ? 1.0f : 0.0f;
+        env->log.success            += env->reached_once ? 1.0f : 0.0f;
+        env->log.success_strict     += succ_strict ? 1.0f : 0.0f;
+        env->log.success_clean_reach+= succ_clean  ? 1.0f : 0.0f;
+        env->log.collision          += env->collided_once ? 1.0f : 0.0f;
+        env->log.timeout            += (truncated && !env->reached_once && !ends_on_collision) ? 1.0f : 0.0f;
         env->log.episode_length  += env->tick;
         env->log.episode_return  += env->episode_return;
         env->log.score           += env->episode_return;

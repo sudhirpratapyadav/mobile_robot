@@ -64,6 +64,8 @@ void my_log(Log* log, Dict* out) {
     dict_set(out, "episode_return", log->episode_return);
     dict_set(out, "episode_length", log->episode_length);
     dict_set(out, "success", log->success);
+    dict_set(out, "success_strict", log->success_strict);
+    dict_set(out, "success_clean_reach", log->success_clean_reach);
     dict_set(out, "collision", log->collision);
     dict_set(out, "timeout", log->timeout);
     dict_set(out, "n", log->n);

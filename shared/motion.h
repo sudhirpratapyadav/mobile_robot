@@ -15,49 +15,59 @@
 #include "obstacle.h"        // ObstacleTrajectory, MAX_WAYPOINTS_PER_OBS
 #include "traj_gen.h"        // existing polynomial-fit family
 
-#define MOTION_T_END      60.0f
+#define MOTION_T_END      80.0f   // matches dyna_train max_steps * dt = 800 * 0.1
 #define MOTION_DT_SAMPLE   1.0f
-#define MOTION_ARENA_HALF 10.0f
-#define MOTION_FAMILY_COUNT 6
+#define MOTION_FAMILY_COUNT 6     // kept at 6 for back-compat (some weights = 0)
 
 typedef enum {
-    MOTION_POLY        = 0,   // existing paper Alg. 1 — polynomial waypoints
+    MOTION_POLY        = 0,   // low-order polynomial trajectory through random control points
     MOTION_LINEAR      = 1,   // p(t) = p0 + v·t, wall bounce
-    MOTION_RECIPROCATING = 2, // moves back and forth between two points
+    MOTION_RECIPROCATING = 2, // DEPRECATED — set weight to 0
     MOTION_SINUSOIDAL  = 3,   // p(t) = p0 + v·t + A·sin(ω·t)·n_perp
-    MOTION_RANDOM_WALK = 4,   // velocity-noise process
+    MOTION_RANDOM_WALK = 4,   // DEPRECATED — set weight to 0
     MOTION_STATIONARY  = 5    // fixed point
 } MotionFamily;
 
 // Hyper-knobs shared by all families (set from the env config).
 typedef struct {
-    float speed_min;      // m/s, lower bound on per-obstacle linear speed
+    float arena_half;     // m, half-extent of the arena ([−A, +A] in both axes)
+    float speed_min;      // m/s, per-obstacle constant speed lower bound
     float speed_max;      // m/s, upper bound
     int   order_min;      // polynomial degree range (POLY only)
     int   order_max;
-    float std_min;        // per-segment speed-noise std (POLY only)
-    float std_max;
-    // Family-specific:
-    float amp_max;        // SINUSOIDAL: max swing amplitude
-    float freq_min;       // SINUSOIDAL: ω/(2π) lower bound (Hz)
+    float std_min;        // DEPRECATED (was per-segment speed noise)
+    float std_max;        // DEPRECATED
+    // Sinusoidal-family:
+    float amp_max;        // max swing amplitude (m)
+    float freq_min;       // ω/(2π) lower bound (Hz)
     float freq_max;
-    float walk_step_std;  // RANDOM_WALK: velocity-perturb std per step
-    float reciprocate_min_dist; // RECIPROCATING: end-to-end straight-line distance min
+    float walk_step_std;  // DEPRECATED
+    float reciprocate_min_dist; // DEPRECATED
+    // Rejection-sampling: keep obstacles' t=0 positions at least
+    // `init_min_dist_from_robot` away from (robot_x, robot_y). Caller is
+    // expected to set these per reset. 0 = no rejection.
+    float init_min_dist_from_robot;
+    float robot_x;
+    float robot_y;
 } MotionParams;
 
 static inline MotionParams motion_default_params(void) {
     return (MotionParams){
+        .arena_half = 12.0f,         // larger default — env sets per-reset
         .speed_min = 0.3f,
-        .speed_max = 2.5f,
+        .speed_max = 2.0f,
         .order_min = 1,
-        .order_max = 5,
+        .order_max = 2,
         .std_min = 0.0f,
-        .std_max = 0.3f,
-        .amp_max = 3.0f,
-        .freq_min = 0.05f,
-        .freq_max = 0.5f,
-        .walk_step_std = 0.4f,
-        .reciprocate_min_dist = 4.0f,
+        .std_max = 0.0f,
+        .amp_max = 2.0f,
+        .freq_min = 0.10f,
+        .freq_max = 0.50f,
+        .walk_step_std = 0.0f,
+        .reciprocate_min_dist = 0.0f,
+        .init_min_dist_from_robot = 1.0f,
+        .robot_x = 0.0f,
+        .robot_y = 0.0f,
     };
 }
 
@@ -70,6 +80,26 @@ static inline int n_steps(void) {
     int n = (int)(MOTION_T_END / MOTION_DT_SAMPLE) + 1;
     if (n > MAX_WAYPOINTS_PER_OBS) n = MAX_WAYPOINTS_PER_OBS;
     return n;
+}
+
+// Sample a uniform random (x0, y0) inside [-A, +A]² and reject if it's too
+// close to the robot at spawn. Up to `tries` attempts; falls back to the
+// last sample if all fail.
+static inline void sample_init_pos(unsigned int* rng, const MotionParams* mp,
+                                   float* x0_out, float* y0_out) {
+    float A = mp->arena_half;
+    float min_d2 = mp->init_min_dist_from_robot * mp->init_min_dist_from_robot;
+    float x = 0.0f, y = 0.0f;
+    for (int t = 0; t < 20; t++) {
+        x = rand_uniformf(rng, -A, A);
+        y = rand_uniformf(rng, -A, A);
+        if (min_d2 <= 0.0f) break;
+        float dx = x - mp->robot_x;
+        float dy = y - mp->robot_y;
+        if (dx*dx + dy*dy >= min_d2) break;
+    }
+    *x0_out = x;
+    *y0_out = y;
 }
 
 static inline float wrap_bounce(float x, float lo, float hi) {
@@ -85,20 +115,21 @@ static inline float wrap_bounce(float x, float lo, float hi) {
 
 static inline bool fam_linear(ObstacleTrajectory* out, unsigned int* rng,
                               const MotionParams* mp) {
+    float A = mp->arena_half;
     float speed = rand_uniformf(rng, mp->speed_min, mp->speed_max);
     float ang   = rand_uniformf(rng, 0.0f, 2.0f * (float)M_PI);
     float vx = speed * cosf(ang);
     float vy = speed * sinf(ang);
-    float x0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-    float y0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+    float x0, y0;
+    sample_init_pos(rng, mp, &x0, &y0);
     int N = n_steps();
     out->num_waypoints = N;
     for (int i = 0; i < N; i++) {
         float t = i * MOTION_DT_SAMPLE;
         float x = x0 + vx * t;
         float y = y0 + vy * t;
-        x = wrap_bounce(x, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-        y = wrap_bounce(y, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+        x = wrap_bounce(x, -A, A);
+        y = wrap_bounce(y, -A, A);
         out->t[i] = t; out->x[i] = x; out->y[i] = y;
     }
     return true;
@@ -106,7 +137,7 @@ static inline bool fam_linear(ObstacleTrajectory* out, unsigned int* rng,
 
 static inline bool fam_reciprocating(ObstacleTrajectory* out, unsigned int* rng,
                                      const MotionParams* mp) {
-    float A_half = MOTION_ARENA_HALF - 0.5f;
+    float A_half = mp->arena_half - 0.5f;
     float speed = rand_uniformf(rng, mp->speed_min, mp->speed_max);
     float xA, yA, xB, yB;
     for (int tries = 0; tries < 20; tries++) {
@@ -136,25 +167,26 @@ static inline bool fam_reciprocating(ObstacleTrajectory* out, unsigned int* rng,
 
 static inline bool fam_sinusoidal(ObstacleTrajectory* out, unsigned int* rng,
                                   const MotionParams* mp) {
+    float A_arena = mp->arena_half;
     float speed = rand_uniformf(rng, mp->speed_min, mp->speed_max);
     float ang   = rand_uniformf(rng, 0.0f, 2.0f * (float)M_PI);
     float vx = speed * cosf(ang);
     float vy = speed * sinf(ang);
     float perp_x = -sinf(ang);
     float perp_y =  cosf(ang);
-    float A = rand_uniformf(rng, 0.2f, mp->amp_max);
+    float A_amp = rand_uniformf(rng, 0.2f, mp->amp_max);
     float freq = rand_uniformf(rng, mp->freq_min, mp->freq_max);
     float omega = 2.0f * (float)M_PI * freq;
-    float x0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-    float y0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+    float x0, y0;
+    sample_init_pos(rng, mp, &x0, &y0);
     int N = n_steps();
     out->num_waypoints = N;
     for (int i = 0; i < N; i++) {
         float t = i * MOTION_DT_SAMPLE;
-        float x = x0 + vx * t + A * sinf(omega * t) * perp_x;
-        float y = y0 + vy * t + A * sinf(omega * t) * perp_y;
-        x = wrap_bounce(x, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-        y = wrap_bounce(y, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+        float x = x0 + vx * t + A_amp * sinf(omega * t) * perp_x;
+        float y = y0 + vy * t + A_amp * sinf(omega * t) * perp_y;
+        x = wrap_bounce(x, -A_arena, A_arena);
+        y = wrap_bounce(y, -A_arena, A_arena);
         out->t[i] = t; out->x[i] = x; out->y[i] = y;
     }
     return true;
@@ -166,8 +198,9 @@ static inline bool fam_random_walk(ObstacleTrajectory* out, unsigned int* rng,
     float ang   = rand_uniformf(rng, 0.0f, 2.0f * (float)M_PI);
     float vx = speed0 * cosf(ang);
     float vy = speed0 * sinf(ang);
-    float x = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-    float y = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+    float A = mp->arena_half;
+    float x = rand_uniformf(rng, -A, A);
+    float y = rand_uniformf(rng, -A, A);
     int N = n_steps();
     out->num_waypoints = N;
     out->t[0] = 0.0f; out->x[0] = x; out->y[0] = y;
@@ -182,10 +215,10 @@ static inline bool fam_random_walk(ObstacleTrajectory* out, unsigned int* rng,
         float t = i * MOTION_DT_SAMPLE;
         x += vx * MOTION_DT_SAMPLE;
         y += vy * MOTION_DT_SAMPLE;
-        if (x >  MOTION_ARENA_HALF) { x =  MOTION_ARENA_HALF; vx = -vx; }
-        if (x < -MOTION_ARENA_HALF) { x = -MOTION_ARENA_HALF; vx = -vx; }
-        if (y >  MOTION_ARENA_HALF) { y =  MOTION_ARENA_HALF; vy = -vy; }
-        if (y < -MOTION_ARENA_HALF) { y = -MOTION_ARENA_HALF; vy = -vy; }
+        if (x >  A) { x =  A; vx = -vx; }
+        if (x < -A) { x = -A; vx = -vx; }
+        if (y >  A) { y =  A; vy = -vy; }
+        if (y < -A) { y = -A; vy = -vy; }
         out->t[i] = t; out->x[i] = x; out->y[i] = y;
     }
     return true;
@@ -193,9 +226,8 @@ static inline bool fam_random_walk(ObstacleTrajectory* out, unsigned int* rng,
 
 static inline bool fam_stationary(ObstacleTrajectory* out, unsigned int* rng,
                                   const MotionParams* mp) {
-    (void)mp;
-    float x0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
-    float y0 = rand_uniformf(rng, -MOTION_ARENA_HALF, MOTION_ARENA_HALF);
+    float x0, y0;
+    sample_init_pos(rng, mp, &x0, &y0);
     out->num_waypoints = 1;
     out->t[0] = 0.0f;
     out->x[0] = x0;
@@ -203,14 +235,47 @@ static inline bool fam_stationary(ObstacleTrajectory* out, unsigned int* rng,
     return true;
 }
 
-// Poly family is a thin wrapper around the existing paper-Alg-1 generator.
+// Poly family — start at a uniform random (x0, y0), pick a random heading
+// and a small lateral acceleration, integrate forward at constant tangent
+// speed. Produces smooth curved trajectories (order 1 = linear-ish, order
+// 2 = parabolic). Bounces off arena walls.
+//
+// Note: this is a much simpler "natural" generator than the paper's
+// Algorithm 1 (which fits an arbitrary-degree polynomial through random
+// control points and ends up with high-curvature wiggles). We keep the
+// `order_min/max` knob: order 1 → no curvature, order 2 → constant
+// curvature, order ≥ 3 → adds a small slow swing.
 static inline bool fam_poly(ObstacleTrajectory* out, unsigned int* rng,
                             const MotionParams* mp) {
-    return traj_generate(out, rng,
-                         mp->order_min, mp->order_max,
-                         mp->speed_min, mp->speed_max,
-                         mp->std_min,   mp->std_max,
-                         0.05f);
+    float A = mp->arena_half;
+    float speed = rand_uniformf(rng, mp->speed_min, mp->speed_max);
+    float ang   = rand_uniformf(rng, 0.0f, 2.0f * (float)M_PI);
+    float vx = speed * cosf(ang);
+    float vy = speed * sinf(ang);
+    float perp_x = -sinf(ang);
+    float perp_y =  cosf(ang);
+    // Curvature: 0 for order=1, in [-0.5, 0.5] for order=2, larger for order ≥ 3.
+    int order = (mp->order_min <= mp->order_max)
+                ? mp->order_min + (rand_r(rng) % (mp->order_max - mp->order_min + 1))
+                : mp->order_min;
+    if (order < 1) order = 1;
+    float curvature_scale = 0.0f;
+    if (order >= 2) curvature_scale = 0.5f * (order - 1);
+    float lat_acc = rand_uniformf(rng, -curvature_scale, curvature_scale);
+    float x0, y0;
+    sample_init_pos(rng, mp, &x0, &y0);
+    int N = n_steps();
+    out->num_waypoints = N;
+    for (int i = 0; i < N; i++) {
+        float t = i * MOTION_DT_SAMPLE;
+        // Tangential position + quadratic lateral drift along perp.
+        float x = x0 + vx * t + 0.5f * lat_acc * t * t * perp_x;
+        float y = y0 + vy * t + 0.5f * lat_acc * t * t * perp_y;
+        x = wrap_bounce(x, -A, A);
+        y = wrap_bounce(y, -A, A);
+        out->t[i] = t; out->x[i] = x; out->y[i] = y;
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------------------
