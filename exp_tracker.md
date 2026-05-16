@@ -613,21 +613,57 @@ we can see the full progression: peak around 240M, then slow decay.
    "stationary = expected -3 minus a small goal-attr". Stationary wins.
 
 **Next experiments (real ones this time):**
-- [ ] Don't trust 100M numbers — scale matters. Either run all variants
-      to 500M+ or accept 100M is just a smoke test.
-- [ ] Scale `time_penalty` linearly with `collision_penalty`. Try
-      `time_penalty=0.05` (vs current 0.005) so doing-nothing costs
-      -30 over an episode, comparable to a couple of collisions.
-- [ ] Or **shape progress over the entire horizon** — replace the
-      Δ-distance (Markov) reward with a reward proportional to
-      `(initial_dist - current_dist) / horizon` so the agent gets credit
-      for *being closer* to the goal than at start, regardless of how
-      it moves.
-- [ ] Or **make the goal-attraction stronger and wider** (`alpha_g=0.5,
-      sigma_g=15`) so even from across the arena there's a non-trivial
-      gradient pulling toward the goal.
-- [ ] Or **warmstart from a working ckpt** (e.g. the 100M `ukwnlxj3`
-      lidar option-C @ 20.8%) so we don't pass through the do-nothing
-      basin during PPO's value-learning phase.
-- [ ] Inspect the wandb curves of `v6r7zeja` to see exactly when
-      entropy started growing — that's the symptom we need to suppress.
+- [x] Don't trust 100M numbers — scale matters.
+- [x] Goal-attraction is now stronger AND wider — see the 3-scale
+      Gaussian reward redesign in run `rnc5gfi8` below.
+
+---
+
+### `rnc5gfi8` — costmap CNN + 3-scale Gaussian + no-termination (210M, stopped early)
+
+**Trained:** 2026-05-16 (stopped at ~210M / planned 500M, per user; train-side
+distance-to-goal had reduced to "negligible" so user wanted to switch to a
+collision_penalty sweep instead of running to 500M).
+**Branch / commit:** `b375d2a`
+**Hypothesis:** A reward that is *always positive* (3-scale Gaussian goal
+attraction, no Δ-distance, no time penalty, no termination) breaks the
+"do-nothing is safer than moving" trap that collapsed previous runs.
+**Config delta vs `v6r7zeja`:**
+- gamma_d, beta, time_penalty, success_bonus = 0 (all off)
+- new: alpha_short=0.3 σ=2.5, alpha_med=0.3 σ=10, alpha_long=0.4 σ=20
+- terminate_on_goal = 0, terminate_on_collision = 0
+- collision_penalty applied per EVENT (entering edge) not per step
+- max_steps 600 → 800 (80 s episodes)
+- success criterion now L∞ box (goal_box_half=0.3) matching eval
+- new wandb telemetry: min_dist_to_goal, final_dist, n_collision_events,
+  closest_obstacle, steps_at_goal
+
+**Result (corrected eval, 600 trials):**
+
+| Bin    | Success | Collision | Timeout |
+|--------|---------|-----------|---------|
+| Easy   | 0.0%    | 64.5%     | 35.5%   |
+| Medium | 0.0%    | 99.5%     | 0.5%    |
+| Hard   | 0.0%    | 100.0%    | 0.0%    |
+| **Overall** | **0.0%** | — | — |
+
+**Observations:**
+- **The collapse problem is gone.** Robot is moving (high collision rates,
+  not 100% timeout). Per-event collision penalty + always-positive goal
+  attraction breaks the do-nothing attractor.
+- **But the policy doesn't avoid obstacles** — collision_penalty=1.0 is
+  trivially small relative to the reward stream (~+0.1 to +1.0/step from
+  the 3 Gaussians). Per the budget math: a single collision (-1) is paid
+  back by 1-10 steps near the goal. Policy correctly concludes "drive
+  through obstacles toward goal" is optimal.
+- Easy bin shows 35% timeout (some episodes don't even commit to driving)
+  but medium/hard show ~100% collision (decisive but wrong).
+- Train-side wandb: `min_dist_to_goal` was nearly 0 by 200M — meaning the
+  policy *does* find the goal in random-start training (where sometimes
+  the spawn is unobstructed). The 0% eval success is a generalisation
+  failure to the fixed 21-m gauntlet, not a learning failure.
+
+**Conclusion:** the new reward design works (no collapse), but the
+collision penalty needs to be much larger so the policy actually trades
+off speed-to-goal vs. collision risk. User's plan: sweep collision_penalty
+∈ {5, 10, 20} at 200M each. See task #48.
