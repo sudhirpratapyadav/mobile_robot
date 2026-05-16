@@ -49,9 +49,12 @@ static DynaTrain make_env(unsigned int seed,
         .time_penalty = 0.0f,
         .alpha_g = 0.0f, .sigma_g = 5.0f,
         // 3-scale Gaussian goal attraction (active reward signal).
-        .alpha_short = 1.0f, .sigma_short =  2.5f,   // peak <  5 m
-        .alpha_med   = 1.0f, .sigma_med   = 10.0f,   // peak < 20 m
-        .alpha_long  = 1.0f, .sigma_long  = 20.0f,   // peak < 40 m
+        // Weights sum to 1.0 — at-goal reward = 1.0/step. Larger weight on
+        // the long term so there's a non-trivial gradient across the whole
+        // arena, not just near the goal.
+        .alpha_short = 0.3f, .sigma_short =  2.5f,   // peak <  5 m
+        .alpha_med   = 0.3f, .sigma_med   = 10.0f,   // peak < 20 m
+        .alpha_long  = 0.4f, .sigma_long  = 20.0f,   // peak < 40 m
         // Episodes always run to max_steps; collisions/goal don't end them.
         .terminate_on_goal      = 0,
         .terminate_on_collision = 0,
