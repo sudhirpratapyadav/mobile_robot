@@ -76,4 +76,8 @@ void my_log(Log* log, Dict* out) {
     dict_set(out, "n_collision_events", log->n_collision_events);
     dict_set(out, "closest_obstacle",   log->closest_obstacle);
     dict_set(out, "steps_at_goal",      log->steps_at_goal);
+    dict_set(out, "dist_from_goal_at_first_collision",
+                                        log->dist_from_goal_at_first_collision);
+    dict_set(out, "max_steps_between_collisions",
+                                        log->max_steps_between_collisions);
 }

@@ -88,6 +88,13 @@ typedef struct {
     float n_collision_events;  // mean collision-event count per episode
     float closest_obstacle;    // mean of the closest obstacle distance ever seen
     float steps_at_goal;       // mean number of steps within the goal box
+    // Collision-timing metrics (per-episode, mean over all episodes)
+    //   dist_from_goal_at_first_collision
+    //       = distance at first collision, or min-dist-seen if no collision
+    //   max_steps_between_collisions
+    //       = longest non-collision streak, or full episode length if no collision
+    float dist_from_goal_at_first_collision;
+    float max_steps_between_collisions;
 } Log;
 
 typedef struct {
@@ -172,6 +179,9 @@ typedef struct {
     float ep_min_obs_dist;      // min(closest_obstacle_dist) this episode
     int   ep_n_collision_events;
     int   ep_steps_at_goal;
+    float ep_dist_at_first_coll;  // dist to goal at first collision (-1 if none yet)
+    int   ep_last_coll_tick;      // tick of the most recent collision (-1 if none)
+    int   ep_max_streak;          // longest run of consecutive non-collision steps so far
 
     // Motion-family mixture (each weight is sampled uniformly from a Categorical)
     int   mw_poly, mw_linear, mw_reciprocating, mw_sinusoidal, mw_random_walk, mw_stationary;
@@ -330,6 +340,9 @@ void c_reset(DynaTrain* env) {
     env->ep_min_obs_dist = 1e9f;
     env->ep_n_collision_events = 0;
     env->ep_steps_at_goal = 0;
+    env->ep_dist_at_first_coll = -1.0f;   // sentinel: "no collision yet"
+    env->ep_last_coll_tick = -1;
+    env->ep_max_streak = 0;
 
     // Sample obstacle count for the episode.
     int lo = env->num_obstacles_min, hi = env->num_obstacles_max;
@@ -513,6 +526,18 @@ void c_step(DynaTrain* env) {
         env->collided_once = true;
         if (!env->reached_once) env->collided_before_reach = true;
         env->ep_n_collision_events++;
+        // Record distance-at-first-collision (first collision only).
+        if (env->ep_dist_at_first_coll < 0.0f) {
+            env->ep_dist_at_first_coll = dist;
+        }
+        // Streak from last collision to this one (or from episode start if
+        // this is the first collision). ep_last_coll_tick = -1 means
+        // "no prior collision" — streak is tick - 0 = tick.
+        int streak = (env->ep_last_coll_tick < 0)
+                     ? env->tick
+                     : env->tick - env->ep_last_coll_tick;
+        if (streak > env->ep_max_streak) env->ep_max_streak = streak;
+        env->ep_last_coll_tick = env->tick;
         if (env->collision_penalty > 0.0f) {
             r -= env->collision_penalty;
         }
@@ -559,6 +584,24 @@ void c_step(DynaTrain* env) {
         env->log.n_collision_events += (float)env->ep_n_collision_events;
         env->log.closest_obstacle   += env->ep_min_obs_dist < 1e8f ? env->ep_min_obs_dist : 0.0f;
         env->log.steps_at_goal      += (float)env->ep_steps_at_goal;
+        // dist-from-goal-at-first-collision: if no collision happened
+        // this episode, fall back to the min-distance-seen.
+        float dist_first = env->ep_dist_at_first_coll >= 0.0f
+                           ? env->ep_dist_at_first_coll
+                           : (env->ep_min_dist < 1e8f ? env->ep_min_dist : 0.0f);
+        env->log.dist_from_goal_at_first_collision += dist_first;
+        // max consecutive-non-collision streak. If episode had no collision,
+        // the whole episode is one streak (= env->tick). Otherwise, finalize
+        // the tail-streak (from last collision to episode end) and take the max.
+        int final_streak;
+        if (env->ep_last_coll_tick < 0) {
+            final_streak = env->tick;
+        } else {
+            int tail = env->tick - env->ep_last_coll_tick;
+            final_streak = env->ep_max_streak;
+            if (tail > final_streak) final_streak = tail;
+        }
+        env->log.max_steps_between_collisions += (float)final_streak;
         c_reset(env);
     } else {
         compute_obs(env);
