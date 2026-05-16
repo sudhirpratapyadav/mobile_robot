@@ -54,6 +54,7 @@ void my_init(Env* env, Dict* kwargs) {
     env->sigma_long         = dict_get(kwargs, "sigma_long")->value;
     env->terminate_on_goal      = (int)dict_get(kwargs, "terminate_on_goal")->value;
     env->terminate_on_collision = (int)dict_get(kwargs, "terminate_on_collision")->value;
+    env->goal_box_half          = dict_get(kwargs, "goal_box_half")->value;
     init(env);
 }
 
@@ -66,4 +67,11 @@ void my_log(Log* log, Dict* out) {
     dict_set(out, "collision", log->collision);
     dict_set(out, "timeout", log->timeout);
     dict_set(out, "n", log->n);
+    // New per-episode telemetry. PufferLib divides by `n` for dashboard
+    // display, so these become per-episode means automatically.
+    dict_set(out, "min_dist_to_goal",   log->min_dist_to_goal);
+    dict_set(out, "final_dist_to_goal", log->final_dist_to_goal);
+    dict_set(out, "n_collision_events", log->n_collision_events);
+    dict_set(out, "closest_obstacle",   log->closest_obstacle);
+    dict_set(out, "steps_at_goal",      log->steps_at_goal);
 }

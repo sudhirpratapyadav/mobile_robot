@@ -44,6 +44,7 @@ static DynaTrain make_env(unsigned int seed,
         .success_bonus = 0.0f,                // off (per user 2026-05-16)
         .collision_penalty = 1.0f,            // per-event
         .goal_radius = goal_radius,
+        .goal_box_half = 0.3f,                // L∞-box success, paper criterion
         // Old single-scale goal-attraction — off in favor of 3-scale below.
         .time_penalty = 0.0f,
         .alpha_g = 0.0f, .sigma_g = 5.0f,

@@ -76,10 +76,16 @@ typedef struct {
     float score;
     float episode_return;
     float episode_length;
-    float success;
-    float collision;
-    float timeout;
+    float success;             // ratio of episodes that ever touched the goal
+    float collision;           // ratio of episodes with at least one collision
+    float timeout;             // 1 − success when no early termination
     float n;
+    // Per-episode telemetry (sum across episodes; dashboard divides by n).
+    float min_dist_to_goal;    // mean over episodes of the closest the robot got
+    float final_dist_to_goal;  // mean over episodes of the final distance
+    float n_collision_events;  // mean collision-event count per episode
+    float closest_obstacle;    // mean of the closest obstacle distance ever seen
+    float steps_at_goal;       // mean number of steps within the goal box
 } Log;
 
 typedef struct {
@@ -122,7 +128,9 @@ typedef struct {
     float sigma_o;
     float success_bonus;
     float collision_penalty;
-    float goal_radius;
+    float goal_radius;        // Euclidean fallback (used iff goal_box_half ≤ 0)
+    float goal_box_half;      // L∞ half-extent for "reached" — matches eval's
+                              //   check_goal_node.py:arrival_gaol (paper = 0.3 m)
     // Reward extensions (added 2026-05-15 to fix the "do-nothing" collapse
     // observed in the 5B run with v_max=0.5 + accel limits).
     //   time_penalty:  constant -ve reward per step. (DEPRECATED but kept
@@ -156,6 +164,11 @@ typedef struct {
     bool  reached_once;
     bool  was_in_collision;     // edge-detect for per-event collision penalty
     bool  collided_once;
+    // Per-episode trackers for the new telemetry log channels.
+    float ep_min_dist;          // min(dist) ever seen this episode
+    float ep_min_obs_dist;      // min(closest_obstacle_dist) this episode
+    int   ep_n_collision_events;
+    int   ep_steps_at_goal;
 
     // Motion-family mixture (each weight is sampled uniformly from a Categorical)
     int   mw_poly, mw_linear, mw_reciprocating, mw_sinusoidal, mw_random_walk, mw_stationary;
@@ -309,6 +322,10 @@ void c_reset(DynaTrain* env) {
     env->reached_once = false;
     env->was_in_collision = false;
     env->collided_once = false;
+    env->ep_min_dist = 1e9f;
+    env->ep_min_obs_dist = 1e9f;
+    env->ep_n_collision_events = 0;
+    env->ep_steps_at_goal = 0;
 
     // Sample obstacle count for the episode.
     int lo = env->num_obstacles_min, hi = env->num_obstacles_max;
@@ -461,7 +478,16 @@ void c_step(DynaTrain* env) {
     }
 
     // ───── Goal & collision events ─────
-    bool reached_now = (dist < env->goal_radius);
+    // Success criterion: L∞ box if goal_box_half > 0, else legacy Euclidean.
+    // Default goal_box_half = 0.3 m matches the paper's eval pipeline
+    // (check_goal_node.py:arrival_gaol).
+    bool reached_now;
+    if (env->goal_box_half > 0.0f) {
+        reached_now = fabsf(env->robot.x - env->goal_x) < env->goal_box_half
+                   && fabsf(env->robot.y - env->goal_y) < env->goal_box_half;
+    } else {
+        reached_now = (dist < env->goal_radius);
+    }
     bool collided_now = obstacle_collision(env) || wall_collision(env);
 
     // First-time goal touch: bookkeeping only (success_bonus is applied
@@ -477,11 +503,20 @@ void c_step(DynaTrain* env) {
     // transitions from non-collision to collision.
     if (collided_now && !env->was_in_collision) {
         env->collided_once = true;
+        env->ep_n_collision_events++;
         if (env->collision_penalty > 0.0f) {
             r -= env->collision_penalty;
         }
     }
     env->was_in_collision = collided_now;
+
+    // ───── Per-episode telemetry ─────
+    if (dist < env->ep_min_dist) env->ep_min_dist = dist;
+    {
+        float d_obs_now = closest_obstacle_dist(env);
+        if (d_obs_now < env->ep_min_obs_dist) env->ep_min_obs_dist = d_obs_now;
+    }
+    if (reached_now) env->ep_steps_at_goal++;
 
     // ───── Termination ─────
     bool ends_on_goal      = (reached_now  && env->terminate_on_goal);
@@ -505,6 +540,12 @@ void c_step(DynaTrain* env) {
         env->log.episode_return  += env->episode_return;
         env->log.score           += env->episode_return;
         env->log.n               += 1.0f;
+        // New telemetry channels (sums; dashboard divides by n)
+        env->log.min_dist_to_goal   += env->ep_min_dist < 1e8f ? env->ep_min_dist : 0.0f;
+        env->log.final_dist_to_goal += dist;
+        env->log.n_collision_events += (float)env->ep_n_collision_events;
+        env->log.closest_obstacle   += env->ep_min_obs_dist < 1e8f ? env->ep_min_obs_dist : 0.0f;
+        env->log.steps_at_goal      += (float)env->ep_steps_at_goal;
         c_reset(env);
     } else {
         compute_obs(env);
