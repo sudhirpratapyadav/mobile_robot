@@ -667,3 +667,76 @@ attraction, no Δ-distance, no time penalty, no termination) breaks the
 collision penalty needs to be much larger so the policy actually trades
 off speed-to-goal vs. collision risk. User's plan: sweep collision_penalty
 ∈ {5, 10, 20} at 200M each. See task #48.
+
+---
+
+### `ec6rd1tq` — dense obstacle repulsion (β=1, σ_o=0.8, 200M)
+
+**Trained:** 2026-05-16 ~19:00 (~21 min wall, 9 ckpts saved)
+**Branch / commit:** `463c199`
+**Hypothesis:** the per-event collision penalty doesn't actually affect
+training meaningfully (rare events + PPO clip + advantage normalisation
+all suppress the signal). A **dense per-step obstacle repulsion** —
+`-β · exp(-(d_obs/σ_o)²)` at every step — should produce a meaningful
+collision-avoidance gradient because it varies across many states.
+**Config delta vs `rnc5gfi8`:**
+- `beta = 1.0` (was 0)  — repulsion weight
+- `sigma_o = 0.8` m (was 2.0) — sharp falloff at the collision boundary
+  (0.8 m centre-to-centre = robot.radius 0.30 + obstacle.radius 0.50)
+- `collision_penalty = 0` (was 1.0) — disabled per-event penalty
+
+**wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/ec6rd1tq
+Group: `costmap_3gauss_repuls`. Tag: `costmap_3gauss_repuls_beta1_sigma08_200M`.
+
+**Training dashboard at 200M:**
+- success = **0.941** (94% touched goal in training!)
+- collision = 0.872 (most episodes have at least one collision)
+- min_dist_to_goal = 0.095 m (essentially at goal)
+- steps_at_goal = 122.8 (dwells 15% of episode at goal)
+- entropy = 7.25 (growing — concerning)
+
+**Result (eval on published 60, 600 trials):**
+
+| Bin    | Success | Collision | Timeout |
+|--------|---------|-----------|---------|
+| Easy   | 0.0%    | 0.0%      | 100.0%  |
+| Medium | 0.0%    | 0.0%      | 100.0%  |
+| Hard   | 0.0%    | 0.0%      | 100.0%  |
+| **Overall** | **0.0%** | — | — |
+
+**Sanity check on intermediate (26M ckpt):** 65/95/100% collision rates
+across easy/medium/hard — robot was moving and crashing at that point.
+By 200M it learned to **not move at all** in the eval geometry.
+
+**Diagnosis: severe train-eval generalisation gap.**
+- Training has **random-start** scenarios — the robot often spawns near
+  the goal in a sparse area → trivially racks up reward. Learns "head
+  to where the goal vector points."
+- Eval has **fixed spawn outside the room** (x=12, y=0, yaw=π) and must
+  enter through a 3-walled gauntlet to reach goal at (-9, 0). The
+  training distribution doesn't cover this scenario.
+- The policy that scored 94% in training has 0% in eval. Worse: under
+  eval, the dense repulsion makes "stand still" optimal because moving
+  immediately means colliding (lots of obstacles ahead).
+- So it's a *different* do-nothing collapse: not a reward-design failure,
+  but a distribution-shift one. The policy is competent on its training
+  distribution and useless on the held-out one.
+
+**Why this is interesting:** the previous baseline (rnc5gfi8, no
+repulsion) also got 0% success on eval but was at least *trying* to
+move (64% collision on easy). The repulsion-trained policy is even
+*more cautious* in unfamiliar territory — it correctly avoids collisions
+by not moving, which gives 100% timeout.
+
+**Followup directions:**
+- [ ] Inspect a few eval episodes visually (render WebMs) to confirm
+      the policy is sitting still vs trying-but-failing.
+- [ ] Make training distribution *include* eval-like scenarios — e.g.
+      occasionally spawn the robot 2 m outside a randomly-placed wall
+      and require entry. This would force the policy to learn the
+      "enter-a-cluttered-room" skill it currently lacks.
+- [ ] Or train directly on the published worlds (fewer for training,
+      held-out subset for eval) — gives up generalisation purity but
+      addresses the real failure mode.
+- [ ] Or use a curriculum: start at the eval start pose with very few
+      obstacles, escalate.
