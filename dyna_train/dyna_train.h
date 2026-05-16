@@ -125,16 +125,37 @@ typedef struct {
     float goal_radius;
     // Reward extensions (added 2026-05-15 to fix the "do-nothing" collapse
     // observed in the 5B run with v_max=0.5 + accel limits).
-    //   time_penalty:  constant -ve reward per step. Breaks the symmetry
-    //                  where doing-nothing earns 0 vs. moving-might-collide
-    //                  earns negative.
-    //   alpha_g, sigma_g: goal-attraction Gaussian. Adds
-    //     +alpha_g · exp(-d_goal² / sigma_g²) per step.
-    //     Closer-to-goal is strictly preferred even when stationary.
-    //   Set time_penalty / alpha_g to 0 to disable.
+    //   time_penalty:  constant -ve reward per step. (DEPRECATED but kept
+    //                  for compat — set to 0 to disable.)
+    //   alpha_g, sigma_g: single-scale goal-attraction Gaussian.
+    //                  (DEPRECATED in favor of the 3-scale version below.)
     float time_penalty;
     float alpha_g;
     float sigma_g;
+    // Multi-scale Gaussian goal-attraction (2026-05-16). Replaces the
+    // previous Δ-distance + single-Gaussian shaping. Per step:
+    //   r += alpha_short · exp(-(d/sigma_short)²)
+    //      + alpha_med   · exp(-(d/sigma_med)²)
+    //      + alpha_long  · exp(-(d/sigma_long)²)
+    // The three scales are intended to give a reward gradient at all
+    // distances: long covers the whole arena, medium is the close-approach
+    // pull, short is the precise dock-to-goal signal.
+    // Set any alpha_* to 0 to disable that scale.
+    float alpha_short, sigma_short;
+    float alpha_med,   sigma_med;
+    float alpha_long,  sigma_long;
+    // No-termination mode: when terminate_on_goal=0 the goal touch does NOT
+    // end the episode (robot can dwell), and when terminate_on_collision=0
+    // collisions do NOT end the episode (robot keeps going through).
+    // collision_penalty is then applied PER EVENT (only on the step the
+    // robot transitions from non-collision to collision), not every step.
+    int   terminate_on_goal;
+    int   terminate_on_collision;
+    // Latched per-episode flags for logging — robot "ever touched goal"
+    // and "ever collided." Reset in c_reset.
+    bool  reached_once;
+    bool  was_in_collision;     // edge-detect for per-event collision penalty
+    bool  collided_once;
 
     // Motion-family mixture (each weight is sampled uniformly from a Categorical)
     int   mw_poly, mw_linear, mw_reciprocating, mw_sinusoidal, mw_random_walk, mw_stationary;
@@ -285,6 +306,9 @@ void c_reset(DynaTrain* env) {
     env->robot.v = 0.0f;
     env->robot.w = 0.0f;
     env->robot.theta = rand_uniformf(&env->rng, -(float)M_PI, (float)M_PI);
+    env->reached_once = false;
+    env->was_in_collision = false;
+    env->collided_once = false;
 
     // Sample obstacle count for the episode.
     int lo = env->num_obstacles_min, hi = env->num_obstacles_max;
@@ -396,40 +420,87 @@ void c_step(DynaTrain* env) {
 
     float dist = robot_to_goal_dist(env);
 
-    // Reward
-    float r = env->gamma_d * (env->prev_dist - dist);
-    float d_obs = closest_obstacle_dist(env);
-    if (d_obs < 1e3f) {
-        float sig2 = env->sigma_o * env->sigma_o;
-        r -= env->beta * expf(-(d_obs * d_obs) / sig2);
+    // ───── Reward (per step) ─────
+    float r = 0.0f;
+
+    // Δ-distance shaping (DEPRECATED, set gamma_d=0 to disable)
+    if (env->gamma_d != 0.0f) {
+        r += env->gamma_d * (env->prev_dist - dist);
     }
-    // Goal-attraction Gaussian — peak at goal, ~0 far away. Breaks the
-    // do-nothing symmetry in tandem with the time penalty.
+    // Obstacle Gaussian repulsion (DEPRECATED, set beta=0 to disable)
+    if (env->beta > 0.0f) {
+        float d_obs = closest_obstacle_dist(env);
+        if (d_obs < 1e3f) {
+            float sig2 = env->sigma_o * env->sigma_o;
+            r -= env->beta * expf(-(d_obs * d_obs) / sig2);
+        }
+    }
+    // Single-scale goal-attraction Gaussian (DEPRECATED, set alpha_g=0)
     if (env->alpha_g > 0.0f && env->sigma_g > 0.0f) {
         float sg2 = env->sigma_g * env->sigma_g;
         r += env->alpha_g * expf(-(dist * dist) / sg2);
     }
-    // Per-step time penalty.
+    // Per-step time penalty (DEPRECATED, set time_penalty=0)
     if (env->time_penalty > 0.0f) {
         r -= env->time_penalty;
     }
+    // Multi-scale Gaussian goal attraction — current primary signal.
+    // Each scale gives a soft "proximity" reward at its own range; sum
+    // gives a smooth gradient at all distances.
+    if (env->alpha_short > 0.0f && env->sigma_short > 0.0f) {
+        float s2 = env->sigma_short * env->sigma_short;
+        r += env->alpha_short * expf(-(dist * dist) / s2);
+    }
+    if (env->alpha_med > 0.0f && env->sigma_med > 0.0f) {
+        float s2 = env->sigma_med * env->sigma_med;
+        r += env->alpha_med * expf(-(dist * dist) / s2);
+    }
+    if (env->alpha_long > 0.0f && env->sigma_long > 0.0f) {
+        float s2 = env->sigma_long * env->sigma_long;
+        r += env->alpha_long * expf(-(dist * dist) / s2);
+    }
 
-    bool reached = (dist < env->goal_radius);
-    bool collided = obstacle_collision(env) || wall_collision(env);
-    bool truncated = (env->tick >= env->max_steps);
-    if (reached) r += env->success_bonus;
-    if (collided) r -= env->collision_penalty;
+    // ───── Goal & collision events ─────
+    bool reached_now = (dist < env->goal_radius);
+    bool collided_now = obstacle_collision(env) || wall_collision(env);
+
+    // First-time goal touch: bookkeeping only (success_bonus is applied
+    // only if terminate_on_goal so it doesn't double-pay during dwell).
+    if (reached_now && !env->reached_once) {
+        env->reached_once = true;
+        if (env->success_bonus > 0.0f) {
+            // One-shot bonus on first contact even if not terminating.
+            r += env->success_bonus;
+        }
+    }
+    // Edge-detected collision: penalty applies only on the step the robot
+    // transitions from non-collision to collision.
+    if (collided_now && !env->was_in_collision) {
+        env->collided_once = true;
+        if (env->collision_penalty > 0.0f) {
+            r -= env->collision_penalty;
+        }
+    }
+    env->was_in_collision = collided_now;
+
+    // ───── Termination ─────
+    bool ends_on_goal      = (reached_now  && env->terminate_on_goal);
+    bool ends_on_collision = (collided_now && env->terminate_on_collision);
+    bool truncated         = (env->tick >= env->max_steps);
 
     env->rewards[0] = r;
     env->episode_return += r;
-    env->terminals[0] = (reached || collided) ? 1.0f : 0.0f;
+    env->terminals[0] = (ends_on_goal || ends_on_collision) ? 1.0f : 0.0f;
     env->prev_dist = dist;
 
-    if (reached || collided || truncated) {
-        env->log.perf            += reached ? 1.0f : 0.0f;
-        env->log.success         += reached ? 1.0f : 0.0f;
-        env->log.collision       += collided ? 1.0f : 0.0f;
-        env->log.timeout         += (truncated && !reached && !collided) ? 1.0f : 0.0f;
+    if (ends_on_goal || ends_on_collision || truncated) {
+        // Logging uses the latched per-episode flags so success/collision
+        // counts are meaningful even when termination is off (every
+        // episode then ends via truncation).
+        env->log.perf            += env->reached_once ? 1.0f : 0.0f;
+        env->log.success         += env->reached_once ? 1.0f : 0.0f;
+        env->log.collision       += env->collided_once ? 1.0f : 0.0f;
+        env->log.timeout         += (truncated && !env->reached_once && !ends_on_collision) ? 1.0f : 0.0f;
         env->log.episode_length  += env->tick;
         env->log.episode_return  += env->episode_return;
         env->log.score           += env->episode_return;

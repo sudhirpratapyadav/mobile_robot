@@ -38,15 +38,22 @@ static DynaTrain make_env(unsigned int seed,
         .std_min   = std_min,
         .std_max   = std_max,
         .min_init_goal_dist = 12.0f,
-        .gamma_d = 1.0f,
-        .beta = 1.0f,
-        .sigma_o = 2.0f,
-        .success_bonus = 1.0f,
-        .collision_penalty = 1.0f,
+        .gamma_d = 0.0f,                      // off: Δ-distance shaping
+        .beta = 0.0f,                         // off: obstacle repulsion
+        .sigma_o = 2.0f,                      // unused
+        .success_bonus = 0.0f,                // off (per user 2026-05-16)
+        .collision_penalty = 1.0f,            // per-event
         .goal_radius = goal_radius,
-        // Reward extensions — see dyna_train.h.
-        .time_penalty = 0.005f,
-        .alpha_g = 0.05f, .sigma_g = 5.0f,
+        // Old single-scale goal-attraction — off in favor of 3-scale below.
+        .time_penalty = 0.0f,
+        .alpha_g = 0.0f, .sigma_g = 5.0f,
+        // 3-scale Gaussian goal attraction (active reward signal).
+        .alpha_short = 1.0f, .sigma_short =  2.5f,   // peak <  5 m
+        .alpha_med   = 1.0f, .sigma_med   = 10.0f,   // peak < 20 m
+        .alpha_long  = 1.0f, .sigma_long  = 20.0f,   // peak < 40 m
+        // Episodes always run to max_steps; collisions/goal don't end them.
+        .terminate_on_goal      = 0,
+        .terminate_on_collision = 0,
         .rng = seed,
         // Motion-family defaults: poly-only, matching the historical config.
         .mw_poly = 1, .mw_linear = 0, .mw_reciprocating = 0,

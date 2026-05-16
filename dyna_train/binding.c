@@ -46,6 +46,14 @@ void my_init(Env* env, Dict* kwargs) {
     env->time_penalty       = dict_get(kwargs, "time_penalty")->value;
     env->alpha_g            = dict_get(kwargs, "alpha_g")->value;
     env->sigma_g            = dict_get(kwargs, "sigma_g")->value;
+    env->alpha_short        = dict_get(kwargs, "alpha_short")->value;
+    env->sigma_short        = dict_get(kwargs, "sigma_short")->value;
+    env->alpha_med          = dict_get(kwargs, "alpha_med")->value;
+    env->sigma_med          = dict_get(kwargs, "sigma_med")->value;
+    env->alpha_long         = dict_get(kwargs, "alpha_long")->value;
+    env->sigma_long         = dict_get(kwargs, "sigma_long")->value;
+    env->terminate_on_goal      = (int)dict_get(kwargs, "terminate_on_goal")->value;
+    env->terminate_on_collision = (int)dict_get(kwargs, "terminate_on_collision")->value;
     init(env);
 }
 
