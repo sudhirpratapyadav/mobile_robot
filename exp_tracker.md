@@ -881,7 +881,7 @@ extending further.
 
 ---
 
-## Headline summary (2026-05-17)
+## Headline summary (2026-05-17 / 18)
 
 | Variant | Train-dist clean_reach | Train-dist reach (any) | Paper success | Paper coll | Paper timeout |
 |---|---|---|---|---|---|
@@ -889,8 +889,58 @@ extending further.
 | **beta=10 (e7sadb3v) ⭐** | **67 %** | 95 % | **44.7 %** | 49.0 % | 6.3 % |
 | beta=10 + terminate (8wxdf0mh) | 0 % | 0 % | 0 % | 39.5 % | 60.5 % |
 | beta=50 (1w2zazvt) | 7 % | 52 % | 0 % | 86.8 % | 13.2 % |
+| HIST=2 + beta=10 (891sg5v4) | 0 % | 0 % | 0 % | 0 % | 100 % |
+| beta=10 + succ=5 + coll=5 (4dabm514) | 52 % | 88 % | 26.7 % | 46 % | 27 % |
 
 vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
 - E2E: 18.5 %
 - **Ours (beta=10): 44.7 %** — +14 pp over reported SOTA.
+
+---
+
+### `891sg5v4` — HIST=2 stacked-costmap + native MLP+MinGRU, β=10 — FAILED
+
+**Trained:** 2026-05-17 ~17:10 UTC, GPU 0
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/891sg5v4
+**Hypothesis:** 2-frame stacked costmap gives the policy enough info to perceive
+obstacle motion (vs single-frame which is positionally ambiguous). Tests the
+biggest single hypothesis from `docs/options.md` (A1).
+**Config delta:** `HISTORY_LEN 1 → 2`. Obs dim 4100 → 8196. Everything else
+identical to e7sadb3v.
+**Result (train-dist, 100 ep):** **0 % reach**, 92 % collision, 8 % timeout.
+**Result (paper-eval, 600 trials):** **0 / 600 success**, 100 % timeout.
+Robot literally does not move — `env/min_dist_to_goal = 11.95 m` and spawns
+are ≥ 12 m from goal.
+**Diagnosis:** Doubling obs dim doubled encoder Linear params (525 k → 1.05 M).
+Same step budget + same gradient signal → didn't converge from the bigger
+initial random-action distribution. Native MLP encoder is the wrong tool
+for stacked obs — that's a CNN-shaped problem.
+**Followup:** Skip Axis 1.2 (HIST=5 with MLP would be worse). Switch to
+A2.2 (CNN via --slowly) at HIST=1 first.
+
+---
+
+### `4dabm514` — β=10 + success_bonus=5 + collision_penalty=5 — REGRESSED
+
+**Trained:** 2026-05-17 ~18:31 UTC, GPU 1
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/4dabm514
+**Hypothesis:** Adding a one-shot `success_bonus=5` on first reach and a
+per-event `collision_penalty=5` makes the reach/safety trade-off explicit
+on top of the dense β=10 repulsion + 3-scale Gaussian attraction. Expected
+clean_reach to climb past 67 %.
+**Config delta:** `--env.success-bonus 5.0 --env.collision-penalty 5.0`.
+**Result (train-dist, 100 ep):** clean_reach **52 %** (−15 pp vs e7sadb3v),
+reached_dirty 36 %, collision 10 %, timeout 2 %.
+**Result (paper-eval, 600 trials):** **26.7 %** overall (−18 pp).
+Easy 29.5 %, Medium 31.5 %, Hard 19.0 %.
+**Diagnosis:** Discrete reward signals (one-shot bonus, per-event penalty)
+interfere with the carefully-tuned dense reward landscape. Each per-event
+collision penalty briefly dominates the per-step β·exp(-d²/σ²) repulsion
+gradient → policy becomes over-cautious or learns wrong avoidance behaviour.
+Net: the dense β alone was already the right shape; adding spikes hurt.
+**Conclusion:** **Stop adding discrete reward terms to e7sadb3v's recipe.**
+The dense Gaussian-attraction + dense Gaussian-repulsion combo is the
+right shape; piling on spikes breaks the gradient.
+**Followup:** Don't sweep individual values of success_bonus / collision_pen
+on top of β=10; try fundamentally different lever (architecture instead).

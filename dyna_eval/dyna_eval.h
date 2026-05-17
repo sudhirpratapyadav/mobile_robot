@@ -35,7 +35,7 @@
 //   [costmap_t | costmap_{t-1} | ... | extras] = H*4096 + 4 floats.
 #define OBS_MODE_COSTMAP 1
 #ifndef HISTORY_LEN
-#  define HISTORY_LEN 2   /* axis 1.1 experiment — keep in sync with dyna_train.h */
+#  define HISTORY_LEN 1   /* keep in sync with dyna_train.h */
 #endif
 #if OBS_MODE_COSTMAP
 #  define OBS_EXTRA 4

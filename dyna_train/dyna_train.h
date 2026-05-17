@@ -57,7 +57,7 @@
 // the first H-1 steps. Compile-time so the puffer binding's OBS_SIZE is
 // known. Override at build time: -DHISTORY_LEN=2 etc.
 #ifndef HISTORY_LEN
-#  define HISTORY_LEN 2   /* axis 1.1 experiment — see docs/plan_day_2.md */
+#  define HISTORY_LEN 1   /* axis 1.1 (HIST=2) failed @ 891sg5v4; back to 1 */
 #endif
 #if OBS_MODE_COSTMAP
 #  define OBS_EXTRA 4   // (v, w, goal_dx_body, goal_dy_body)

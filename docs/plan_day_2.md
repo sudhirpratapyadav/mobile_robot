@@ -58,6 +58,26 @@ Cheap ablation: instead of stacking, mark cells in the costmap with the
 estimated obstacle radial velocity (range-rate from one-frame diff). Tests
 "the policy doesn't need raw history, just the derived motion."
 
+### A1.1 result (2026-05-17): HIST=2 with native MLP+MinGRU FAILED
+
+Run `891sg5v4` (HIST=2 + β=10, 500M, single GPU bf16):
+- train-dist clean_reach: **0 %** (vs e7sadb3v's 67 %)
+- train-dist reach (any): **0 %** (vs e7sadb3v's 95 %)
+- min_dist_to_goal: **11.95 m** (env spawns are ≥ 12 m apart → robot literally
+  did not move)
+- 92 % collision, 8 % timeout
+
+**Diagnosis**: doubling the obs dim from 4100 to 8196 doubled the encoder
+Linear weight from 524k → 1.05M params. Same step budget + same gradient
+signal → harder optimization, policy stuck on do-nothing attractor.
+
+**Conclusion**: native MLP encoder is the wrong tool for the larger
+obs. Stacking is a CNN-shaped problem, not an MLP-shaped one.
+
+**Revised next step**: instead of A1.2 (HIST=5 with MLP — would be even
+worse), switch axis priority. A2.1 (use_rnn=1 at HIST=1) next, then
+A2.2 (--slowly + CNN at HIST=2) when other GPU workloads free up.
+
 ## Axis 2 — Policy network
 
 ### A2.1 — MinGRU → LSTM (still flat MLP encoder)
