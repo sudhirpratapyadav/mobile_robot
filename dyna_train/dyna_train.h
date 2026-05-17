@@ -50,9 +50,18 @@
 //   OBS_MODE_COSTMAP = 0 → 720-d LiDAR + (v, w, goal_dx_body, goal_dy_body)
 //   OBS_MODE_COSTMAP = 1 → 64×64 body-frame costmap + (v, w, goal_dx_body, goal_dy_body)
 #define OBS_MODE_COSTMAP 1
+// Observation history. When >1, the env keeps a ring buffer of the last
+// (HISTORY_LEN-1) costmaps and emits all HISTORY_LEN frames stacked
+// channel-wise: [costmap_t, costmap_{t-1}, ..., costmap_{t-(H-1)}, extras].
+// At episode start the buffer is zero-filled so older slots are blank for
+// the first H-1 steps. Compile-time so the puffer binding's OBS_SIZE is
+// known. Override at build time: -DHISTORY_LEN=2 etc.
+#ifndef HISTORY_LEN
+#  define HISTORY_LEN 2   /* axis 1.1 experiment — see docs/plan_day_2.md */
+#endif
 #if OBS_MODE_COSTMAP
 #  define OBS_EXTRA 4   // (v, w, goal_dx_body, goal_dy_body)
-#  define OBS_DIM (COSTMAP_SIZE + OBS_EXTRA)
+#  define OBS_DIM (HISTORY_LEN * COSTMAP_SIZE + OBS_EXTRA)
 #else
 #  define OBS_EXTRA 4
 #  define OBS_DIM (LIDAR_BEAMS + OBS_EXTRA)
@@ -208,6 +217,13 @@ typedef struct {
 
     unsigned int rng;
     bool window_ready;
+
+    // Costmap-history ring buffer. Holds the last (HISTORY_LEN-1) costmaps;
+    // the current one is computed fresh and prepended each step. Allocated
+    // in allocate() to keep DynaTrain struct size constant across builds.
+    // Index 0 = oldest, index (HISTORY_LEN-2) = previous. NULL when
+    // HISTORY_LEN == 1 (no history).
+    float* costmap_history;
 } DynaTrain;
 
 // ============================================================================
@@ -261,8 +277,32 @@ static inline void compute_obs(DynaTrain* env) {
 
 #if OBS_MODE_COSTMAP
     // Egocentric occupancy grid (LingBot-style explicit-geometry obs).
+    // HISTORY_LEN frames stacked. Layout:
+    //   [costmap_t (4096) | costmap_{t-1} (4096) | ... | costmap_{t-(H-1)} | extras]
+    // The current frame is written into observations[0:4096]. Older frames
+    // (when HISTORY_LEN > 1) come from env->costmap_history (a ring of
+    // HISTORY_LEN-1 buffers, oldest first). At episode start they're zero.
     costmap_rasterize(ranges, env->observations);
-    int extras_off = COSTMAP_SIZE;
+#if HISTORY_LEN > 1
+    // Copy history slots into obs after the current frame.
+    for (int h = 0; h < HISTORY_LEN - 1; h++) {
+        // history[h] is the frame from h+1 steps ago (h=0 = previous,
+        // h=H-2 = oldest). We emit them in age order: prev, prev-prev, ...
+        memcpy(env->observations + (h + 1) * COSTMAP_SIZE,
+               env->costmap_history + h * COSTMAP_SIZE,
+               COSTMAP_SIZE * sizeof(float));
+    }
+    // Then shift the ring so the now-current costmap becomes the new
+    // "previous" for next step. Move slot 0..H-3 → 1..H-2, write current into 0.
+    if (HISTORY_LEN > 2) {
+        memmove(env->costmap_history + COSTMAP_SIZE,
+                env->costmap_history,
+                (HISTORY_LEN - 2) * COSTMAP_SIZE * sizeof(float));
+    }
+    memcpy(env->costmap_history, env->observations,
+           COSTMAP_SIZE * sizeof(float));
+#endif
+    int extras_off = HISTORY_LEN * COSTMAP_SIZE;
 #else
     // Raw normalized LiDAR scan.
     for (int i = 0; i < LIDAR_BEAMS; i++) {
@@ -308,6 +348,17 @@ void init(DynaTrain* env) {
     env->sim_time = 0.0f;
     env->window_ready = false;
     memset(&env->log, 0, sizeof(Log));
+    // history buffer must be allocated here too: native PufferLib's
+    // vecenv calls my_init (which calls init) but NOT allocate, since the
+    // framework owns obs/actions/rewards itself. Anything env-internal
+    // (like costmap_history) needs to live in init() to be ready before
+    // the first c_step on either code path.
+#if OBS_MODE_COSTMAP && HISTORY_LEN > 1
+    env->costmap_history = (float*)calloc(
+        (HISTORY_LEN - 1) * COSTMAP_SIZE, sizeof(float));
+#else
+    env->costmap_history = NULL;
+#endif
 }
 
 void allocate(DynaTrain* env) {
@@ -323,6 +374,7 @@ void free_allocated(DynaTrain* env) {
     free(env->actions);
     free(env->rewards);
     free(env->terminals);
+    if (env->costmap_history) free(env->costmap_history);
 }
 
 void c_reset(DynaTrain* env) {
@@ -336,6 +388,12 @@ void c_reset(DynaTrain* env) {
     env->was_in_collision = false;
     env->collided_once = false;
     env->collided_before_reach = false;
+#if OBS_MODE_COSTMAP && HISTORY_LEN > 1
+    if (env->costmap_history) {
+        memset(env->costmap_history, 0,
+               (HISTORY_LEN - 1) * COSTMAP_SIZE * sizeof(float));
+    }
+#endif
     env->ep_min_dist = 1e9f;
     env->ep_min_obs_dist = 1e9f;
     env->ep_n_collision_events = 0;

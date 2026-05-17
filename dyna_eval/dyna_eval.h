@@ -27,13 +27,19 @@
 
 #define MAX_OBSTACLES 30
 // Obs format MUST match dyna_train (see dyna_train/dyna_train.h). Toggle the
-// same switch when changing arches. When OBS_MODE_COSTMAP=1, obs is
+// same compile-time switches when changing arches. When OBS_MODE_COSTMAP=1
+// and HISTORY_LEN=1 (defaults), obs is
 //   [costmap (64*64) | v | w | goal_dx_body | goal_dy_body] = 4100 floats.
 // When 0, obs is [lidar (720) | v | w | goal_dx_body | goal_dy_body] = 724.
+// When HISTORY_LEN > 1, obs is
+//   [costmap_t | costmap_{t-1} | ... | extras] = H*4096 + 4 floats.
 #define OBS_MODE_COSTMAP 1
+#ifndef HISTORY_LEN
+#  define HISTORY_LEN 2   /* axis 1.1 experiment — keep in sync with dyna_train.h */
+#endif
 #if OBS_MODE_COSTMAP
 #  define OBS_EXTRA 4
-#  define OBS_DIM (COSTMAP_SIZE + OBS_EXTRA)
+#  define OBS_DIM (HISTORY_LEN * COSTMAP_SIZE + OBS_EXTRA)
 #else
 #  define OBS_EXTRA 4
 #  define OBS_DIM (LIDAR_BEAMS + OBS_EXTRA)
@@ -152,6 +158,11 @@ typedef struct {
 
     unsigned int rng;
     bool window_ready;
+
+    // Costmap-history ring buffer (matches dyna_train.h's costmap_history).
+    // Holds (HISTORY_LEN-1) frames; the current is computed and prepended
+    // each step. NULL when HISTORY_LEN==1.
+    float* costmap_history;
 } DynaEval;
 
 static inline float robot_to_goal_dist(const DynaEval* env) {
@@ -200,16 +211,28 @@ static inline void update_obstacles(DynaEval* env) {
 
 static inline void compute_obs(DynaEval* env) {
     // Mirror dyna_train/dyna_train.h:compute_obs so the policy sees the
-    // exact same obs layout. LiDAR is always computed (needed by costmap
-    // path; cheap), then either rasterised or written as raw normalized
-    // beams, followed by the 4 extras (v, w, gx_body, gy_body).
+    // exact same obs layout, including HISTORY_LEN-frame stacking.
     float ranges[LIDAR_BEAMS];
     lidar_scan(&env->robot, 0.5f * env->arena_size,
                env->obs_x, env->obs_y, env->num_obstacles, ranges);
 
 #if OBS_MODE_COSTMAP
     costmap_rasterize(ranges, env->observations);
-    int extras_off = COSTMAP_SIZE;
+#if HISTORY_LEN > 1
+    for (int h = 0; h < HISTORY_LEN - 1; h++) {
+        memcpy(env->observations + (h + 1) * COSTMAP_SIZE,
+               env->costmap_history + h * COSTMAP_SIZE,
+               COSTMAP_SIZE * sizeof(float));
+    }
+    if (HISTORY_LEN > 2) {
+        memmove(env->costmap_history + COSTMAP_SIZE,
+                env->costmap_history,
+                (HISTORY_LEN - 2) * COSTMAP_SIZE * sizeof(float));
+    }
+    memcpy(env->costmap_history, env->observations,
+           COSTMAP_SIZE * sizeof(float));
+#endif
+    int extras_off = HISTORY_LEN * COSTMAP_SIZE;
 #else
     for (int i = 0; i < LIDAR_BEAMS; i++) {
         env->observations[i] = ranges[i] / LIDAR_RANGE;
@@ -233,6 +256,12 @@ void init(DynaEval* env) {
     env->episode_idx = 0;
     env->window_ready = false;
     memset(&env->log, 0, sizeof(Log));
+#if OBS_MODE_COSTMAP && HISTORY_LEN > 1
+    env->costmap_history = (float*)calloc(
+        (HISTORY_LEN - 1) * COSTMAP_SIZE, sizeof(float));
+#else
+    env->costmap_history = NULL;
+#endif
 }
 
 void allocate(DynaEval* env) {
@@ -248,6 +277,7 @@ void free_allocated(DynaEval* env) {
     free(env->actions);
     free(env->rewards);
     free(env->terminals);
+    if (env->costmap_history) free(env->costmap_history);
 }
 
 void c_reset(DynaEval* env) {
@@ -264,6 +294,12 @@ void c_reset(DynaEval* env) {
     env->robot.theta = EVAL_START_TH;   // facing −x, into the room's +x opening
     env->robot.v = 0.0f;
     env->robot.w = 0.0f;
+#if OBS_MODE_COSTMAP && HISTORY_LEN > 1
+    if (env->costmap_history) {
+        memset(env->costmap_history, 0,
+               (HISTORY_LEN - 1) * COSTMAP_SIZE * sizeof(float));
+    }
+#endif
     env->goal_x = EVAL_GOAL_X;
     env->goal_y = EVAL_GOAL_Y;
 

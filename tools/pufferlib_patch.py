@@ -24,10 +24,11 @@ class CostmapEncoder(nn.Module):
     """Encoder for our flat-packed costmap observation.
 
     Obs layout (flat, last dim):
-        [costmap (G*G floats) | v | w | goal_dx_body | goal_dy_body]
-    where G = 64 by default.
+        [costmap_t (G*G) | costmap_{t-1} (G*G) | ... | extras (n_extras)]
+    where G = 64 by default and the number of stacked frames is derived
+    from obs_size — `(obs_size - n_extras) / (G*G)`. Must be an integer.
 
-    Reshapes the costmap into (B, 1, G, G), runs a small conv stack, and
+    Reshapes the stack into (B, H, G, G), runs a small conv stack, and
     concatenates with the (v, w, goal) extras before a final MLP.
     """
 
@@ -36,17 +37,20 @@ class CostmapEncoder(nn.Module):
         self.grid = grid
         self.n_extras = n_extras
         self.grid_dim = grid * grid
-        assert obs_size == self.grid_dim + n_extras, (
-            f"CostmapEncoder: obs_size={obs_size} != grid({grid}^2)+extras({n_extras})="
-            f"{self.grid_dim + n_extras}"
+        rem = obs_size - n_extras
+        assert rem > 0 and rem % self.grid_dim == 0, (
+            f"CostmapEncoder: obs_size={obs_size} not consistent with "
+            f"grid({grid}^2)*H + extras({n_extras}). rem={rem}, grid_dim={self.grid_dim}"
         )
+        self.history_len = rem // self.grid_dim
         # Small CNN — three strided convs collapse 64×64 → 8×8, then flatten.
+        # Input channels = history_len so multi-frame stacks work natively.
         self.conv = nn.Sequential(
-            nn.Conv2d(1,  16, kernel_size=5, stride=2, padding=2),  # 64 → 32
+            nn.Conv2d(self.history_len, 16, kernel_size=5, stride=2, padding=2),
             nn.ReLU(),
-            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),  # 32 → 16
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # 16 →  8
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
             nn.Flatten(),
         )
@@ -57,17 +61,18 @@ class CostmapEncoder(nn.Module):
         )
 
     def forward(self, observations):
-        # observations: (B, G*G + n_extras), float32
+        # observations: (B, H*G*G + n_extras), float32
         B = observations.shape[0]
-        grid = observations[:, :self.grid_dim].view(B, 1, self.grid, self.grid)
-        extras = observations[:, self.grid_dim:]
-        z = self.conv(grid)
+        H = self.history_len
+        stack = observations[:, : H * self.grid_dim].view(B, H, self.grid, self.grid)
+        extras = observations[:, H * self.grid_dim:]
+        z = self.conv(stack)
         z = torch.cat([z, extras], dim=-1)
         return self.fc(z)
 
 
 class CostmapEncoder64(CostmapEncoder):
-    """Alias for default 64×64 + 4-extras layout (our COSTMAP_SIZE + OBS_EXTRA)."""
+    """Alias for default 64×64 grid + 4 extras (HISTORY_LEN inferred from obs)."""
     def __init__(self, obs_size, hidden_size=128):
         super().__init__(obs_size, hidden_size, grid=64, n_extras=4)
 # ───── DYNA_BARN PATCH END ─────
