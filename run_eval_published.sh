@@ -61,7 +61,7 @@ for idx in $(seq 0 59); do
     bin="$OUT_DIR/per_world/world_${pad}.bin"
     parq="$OUT_DIR/per_world/world_${pad}.parquet"
     seed=$((SEED_BASE + idx * 100))
-    ./dyna_eval --csv "$bin" --load "$CKPT" \
+    ./dyna_eval --traj "$bin" --load "$CKPT" \
                 --world-file "$world" \
                 --episodes "$N_TRIALS" \
                 --max-steps "$MAX_STEPS" \

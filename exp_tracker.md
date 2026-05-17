@@ -740,3 +740,157 @@ by not moving, which gives 100% timeout.
       addresses the real failure mode.
 - [ ] Or use a curriculum: start at the eval start pose with very few
       obstacles, escalate.
+
+---
+
+### `lptujnh0` — 500M, v_max=2.0 + obstacle-freeze bug fix, beta=1
+
+**Trained:** 2026-05-17 ~05:35 UTC
+**Branch / commit:** post obstacle-freeze fix (`MAX_WAYPOINTS_PER_OBS 64→128`)
+                     and v_max=2.0 ini bump.
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/lptujnh0
+**Hypothesis:** Two env-correctness fixes (obstacles now actually move
+the full 80 s; robot speed bumped from 0.5 to 2.0 to match paper) should
+substantially improve both train and eval performance vs the prior bug-era
+`3o0got0g` 1B ckpt (which scored 99 % train-dist but the eval numbers
+were uninterpretable due to a separate eval-side obs-shape mismatch we
+also fixed earlier today).
+**Config delta:** `MAX_WAYPOINTS_PER_OBS 64→128`,
+                  `train_v_max 0.5→2.0`, otherwise same as `3o0got0g`
+                  (beta=1.0, sigma_o=0.8, no termination, 800-step episodes,
+                  motion mix linear=4 poly=2 sinusoidal=2 stationary=1,
+                  num_obstacles 3–20, speed 0.3–2.0).
+**Training:** 500M steps, ~2 h wall, 32-core / 1×GPU box.
+**Result (train-dist, 100 ep, seed=42, info.json):**
+  - clean_reach: **36 %**   (reached AND no collision before reach)
+  - reached_dirty: **64 %** (reached but collided first)
+  - collision (never reached): 0 %, timeout: 0 %
+  - Old-style "success" (reach-only) would have been 100 % — overstating
+    quality 2.8 × vs the strict clean_reach metric.
+**Observations:**
+  - Robot can actually navigate at 2 m/s now; 4× v_max headroom shows up
+    as much shorter pursuit paths to goals.
+  - But beta=1 obstacle repulsion is too weak — policy "barrels through"
+    obstacles to reach: dense collisions on the way are basically free.
+**Conclusion:** v_max + freeze fixes were necessary but not sufficient.
+Reward shaping is the next lever.
+**Followup:** scale up beta (obstacle repulsion β) and see whether
+clean_reach climbs.
+
+---
+
+### `e7sadb3v` — 500M, beta=10 (10× obstacle repulsion) ⭐ best so far
+
+**Trained:** 2026-05-17 ~09:10 UTC
+**Branch / commit:** as `lptujnh0` + `--env.beta 10.0` CLI override.
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/e7sadb3v
+**Hypothesis:** Stronger obstacle repulsion forces the policy to plan
+around obstacles instead of through them. Test whether the gap from
+36 % clean to 100 % reach (seen on `lptujnh0`) shrinks.
+**Config delta:** beta 1.0 → 10.0.
+**Training:** 500M, ~2 h.
+**Result (train-dist, 100 ep):**
+  - clean_reach: **67 %** (+31 pp vs lptujnh0) ✅
+  - reached_dirty: 28 % (−36 pp)
+  - collision (never reached): 5 %, timeout: 0 %
+  - Reach (any): 95 % — small cost of 5 % non-reach for huge quality gain.
+**Result (DynaBARN paper-eval, 600 trials = 20 envs × 10 trials × 3 difficulties):**
+  - Easy: **55.5 %**   Medium: **44.5 %**   Hard: **34.0 %**   Overall: **44.7 %**
+  - 268 / 600 success, 294 collision, 38 timeout. Monotonic difficulty
+    decay. Failures are crashes, not freezes (timeouts ≤ 9 % everywhere).
+**Beats reported SOTA:** LfH-CP 30.83 % (+13.9 pp), E2E 18.5 % (+26.2 pp).
+**Observations:**
+  - 10× beta did exactly what was hoped: traded a tiny bit of reach
+    capability for much-cleaner trajectories.
+  - Paper-eval was unblocked by an earlier same-day fix to the eval-side
+    v_max clip (was 0.5 m/s, now 2.0). Before that fix this same ckpt
+    scored 0 % paper — purely an eval bug, not a policy gap.
+**Conclusion:** beta=10 is currently the best variant on both
+distributions. The previous "0 % paper" finding was wrong (eval bug,
+not policy failure).
+**Followup:**
+  - Try beta sweep ends: beta=5 (between 1 and 10), beta=20/50.
+  - Once a winner is established, consider longer training (1B–2B).
+
+---
+
+### `8wxdf0mh` — 500M, beta=10 + `terminate_on_goal=1` — REGRESSION
+
+**Trained:** 2026-05-17 ~14:40 UTC
+**Branch / commit:** as `e7sadb3v` + `--env.terminate-on-goal 1`.
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/8wxdf0mh
+**Hypothesis:** Terminating on goal-touch should sharpen the credit
+signal — successful episodes end immediately instead of running 800 steps
+of free 3-scale Gaussian dwell reward. Expectation: at minimum no
+regression, possibly a small gain.
+**Config delta:** `terminate_on_goal 0 → 1`.
+**Training:** 500M, ~2 h. Final wandb: `episode_length=756` (only
+slightly shorter — policy rarely reaches goal in train),
+`collision=0.88`, `final_dist_to_goal=1.33`.
+**Result (train-dist, 100 ep):**
+  - clean_reach: **0 %**   reached_dirty: 0 %   collision: **85 %**
+    timeout: 15 %.
+**Result (paper-eval, 600 trials):**
+  - **0 / 600 success**, 237 collision (39.5 %), 363 timeout (60.5 %).
+  - Easy / Medium / Hard: 0 / 0 / 0.
+**Observations:**
+  - Without a `success_bonus`, terminate-on-goal removes the dwell reward
+    stream (3-scale Gaussian peaks at ~1.0 per step within the goal box,
+    over 800 - reach_time steps). The math now strongly prefers
+    *not* reaching: dwelling near the goal indefinitely outscores
+    touching it. Policy collapsed into a "loiter near goal but never
+    touch" attractor; eval (terminate-on-collision) then can't avoid
+    obstacles either since training dropped the navigation skill.
+**Conclusion:** Don't use `terminate_on_goal=1` without also adding
+a sizable `success_bonus` (≥ peak Gaussian × remaining steps, e.g. 200).
+**Followup:** N/A — revert `terminate_on_goal` to 0 (done).
+
+---
+
+### `1w2zazvt` — 500M, beta=50 (5× the beta=10 winner) — REGRESSION
+
+**Trained:** 2026-05-17 ~17:00 UTC
+**Branch / commit:** as `e7sadb3v` + `--env.beta 50.0`, terminate=0.
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/1w2zazvt
+**Hypothesis:** If 10× beta beat 1× by +31 pp clean_reach, maybe 50×
+helps further. Expected diminishing returns and possibly some over-
+caution (more non-reach), but worth testing the upper end before
+finalising a recipe.
+**Config delta:** beta 10 → 50.
+**Training:** 500M, ~2 h. Final wandb: `episode_return=-681` (very
+negative — repulsion penalty dominating reward),
+`final_dist_to_goal=1.20`, `min_dist_to_goal=0.26`.
+**Result (train-dist, 100 ep):**
+  - clean_reach: **7 %**   reached_dirty: 45 %   collision: 40 %
+    timeout: 8 %.
+  - Reach (any) collapsed: 52 % (vs 95 % at beta=10).
+**Result (paper-eval, 600 trials):**
+  - **0 / 600 success**, 521 collision (86.8 %), 79 timeout (13.2 %).
+**Observations:**
+  - Beta sweep is **non-monotonic**: 1→10 huge gain, 10→50 hard
+    regression. The repulsion gradient at beta=50 dominates so heavily
+    that the goal-attraction signal can't compete; policy ends up
+    making desperate fast moves through obstacle fields instead of
+    safer routing-around.
+  - Negative episode_return is the smoking gun — average per-step
+    reward < 0 means the policy never finds a profitable region of
+    state space.
+**Conclusion:** beta=10 is the local optimum. To search the
+neighbourhood, beta ∈ {3, 5, 15, 20} would be more informative than
+extending further.
+
+---
+
+## Headline summary (2026-05-17)
+
+| Variant | Train-dist clean_reach | Train-dist reach (any) | Paper success | Paper coll | Paper timeout |
+|---|---|---|---|---|---|
+| beta=1 (lptujnh0) | 36 % | 100 % | — | — | — |
+| **beta=10 (e7sadb3v) ⭐** | **67 %** | 95 % | **44.7 %** | 49.0 % | 6.3 % |
+| beta=10 + terminate (8wxdf0mh) | 0 % | 0 % | 0 % | 39.5 % | 60.5 % |
+| beta=50 (1w2zazvt) | 7 % | 52 % | 0 % | 86.8 % | 13.2 % |
+
+vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
+- LfH-CP (SOTA): 30.83 %
+- E2E: 18.5 %
+- **Ours (beta=10): 44.7 %** — +14 pp over reported SOTA.

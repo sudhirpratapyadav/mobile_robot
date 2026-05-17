@@ -47,9 +47,50 @@ OUTCOME_COLOR_BGR = {
     2: ( 80,  80, 220),    # red
     3: ( 80, 180, 220),    # amber
 }
+# Labels we display when the parquet carries per-episode ep_* fields (DYNB
+# format from dyna_train). green = clean reach (reached goal AND no collision
+# before first reach); red = collided at any point; amber = timeout (never
+# reached, never collided). Strictly more informative than the outcome label.
+EP_VERDICT_COLOR_BGR = {
+    "clean_reach": ( 80, 220,  80),    # green
+    "collision":   ( 80,  80, 220),    # red
+    "timeout":     ( 80, 180, 220),    # amber
+    "reached_dirty": ( 80, 180, 180),  # olive — reached but with collision(s)
+    "ongoing":     (180, 180, 180),
+}
 
 
-def world_to_px(x: float, y: float, half: float = ARENA_HALF, size: int = SIZE) -> tuple[int, int]:
+def ep_verdict(ep_clean_reach: int | None, ep_reached: int | None,
+               ep_collided: int | None, outcome: int) -> str:
+    """Pick a per-episode label from the DYNB ep_* fields when present.
+
+    Falls back to outcome-based labelling for old DYNA dumps (no ep_* cols).
+    """
+    if ep_clean_reach is not None:
+        if ep_clean_reach == 1:
+            return "clean_reach"
+        if ep_collided == 1 and ep_reached == 1:
+            return "reached_dirty"
+        if ep_collided == 1:
+            return "collision"
+        if ep_reached == 1:
+            # reached and not collided but not clean_reach? shouldn't happen
+            return "clean_reach"
+        return "timeout"
+    # Legacy fallback
+    if outcome == 1: return "clean_reach"
+    if outcome == 2: return "collision"
+    if outcome == 3: return "timeout"
+    return "ongoing"
+
+
+def world_to_px(x: float, y: float, half: float | None = None, size: int = SIZE) -> tuple[int, int]:
+    # `half` defaults to the *current* module-level ARENA_HALF so callers that
+    # monkey-patch ARENA_HALF (e.g. render_train_dist_webms.py for arena=24)
+    # actually take effect. Python evaluates default args at def-time, so a
+    # literal `half=ARENA_HALF` default would freeze the value at import-time.
+    if half is None:
+        half = ARENA_HALF
     s = size / (2 * half)
     return int(size / 2 + x * s), int(size / 2 - y * s)
 
@@ -90,7 +131,8 @@ def draw_frame(t: int,
                outcome: int,
                world_idx: int,
                difficulty: str,
-               size: int = SIZE) -> np.ndarray:
+               size: int = SIZE,
+               verdict: str = "ongoing") -> np.ndarray:
     img = np.full((size, size, 3), 15, dtype=np.uint8)
     cv2.rectangle(img, (1, 1), (size - 2, size - 2), (180, 180, 80), 1)
 
@@ -126,12 +168,15 @@ def draw_frame(t: int,
     hy = int(rpy - 18 * math.sin(th))   # screen y is inverted
     cv2.line(img, (rpx, rpy), (hx, hy), (240, 240, 240), 2, cv2.LINE_AA)
 
-    # Outcome-coloured border
+    # Verdict-coloured border. With DYNB ep_* fields, this is green only on
+    # clean_reach (reached AND no collision before first reach). Without
+    # those fields, falls back to outcome-driven coloring.
     cv2.rectangle(img, (0, 0), (size - 1, size - 1),
-                  OUTCOME_COLOR_BGR.get(outcome, (200, 200, 200)), 3)
+                  EP_VERDICT_COLOR_BGR.get(verdict, (200, 200, 200)), 3)
 
     # HUD
-    cv2.putText(img, f"world {world_idx:03d}  {difficulty}  step {t}  {OUTCOME_LABEL.get(outcome, '?')}",
+    cv2.putText(img,
+                f"world {world_idx:03d}  {difficulty}  step {t}  {verdict}",
                 (8, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (240, 240, 240), 1, cv2.LINE_AA)
     return img
 
@@ -175,6 +220,13 @@ def render_world_gif(parquet_path: Path,
     goal_px = w2p(float(ep["goal_x"].item(0)), float(ep["goal_y"].item(0)))
 
     outcome = int(ep["outcome"].tail(1).item())
+    # Read DYNB per-episode fields when present.
+    def _last_or_none(col):
+        return int(ep[col].tail(1).item()) if col in ep.columns else None
+    ep_clean   = _last_or_none("ep_clean_reach")
+    ep_reached = _last_or_none("ep_reached")
+    ep_collided = _last_or_none("ep_collided")
+    verdict = ep_verdict(ep_clean, ep_reached, ep_collided, outcome)
 
     ext = out_path.suffix.lower()
     if ext == ".gif":
@@ -203,14 +255,52 @@ def render_world_gif(parquet_path: Path,
     try:
         for t in range(T):
             frame = draw_frame(t, ep, obs_paths, obs_cols, robot_xy_px, thetas,
-                               goal_px, outcome, world_idx, difficulty, size=size)
+                               goal_px, outcome, world_idx, difficulty,
+                               size=size, verdict=verdict)
             writer.append_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
     finally:
         writer.close()
-    return {"world": world_idx, "frames": T, "outcome": OUTCOME_LABEL.get(outcome, "?")}
+    info = {
+        "world": world_idx,
+        "frames": T,
+        "outcome": OUTCOME_LABEL.get(outcome, "?"),
+        "verdict": verdict,
+    }
+    # Surface DYNB ep_* fields too when present so callers (e.g.
+    # render_train_dist_webms.py) can write a richer info.json.
+    for k, v in (("ep_clean_reach", ep_clean),
+                 ("ep_reached", ep_reached),
+                 ("ep_collided", ep_collided)):
+        if v is not None:
+            info[k] = v
+    if "ep_n_collisions" in ep.columns:
+        info["ep_n_collisions"] = int(ep["ep_n_collisions"].tail(1).item())
+    if "ep_strict" in ep.columns:
+        info["ep_strict"] = int(ep["ep_strict"].tail(1).item())
+    # Start / goal / final
+    info["start"] = [float(ep["robot_x"].item(0)), float(ep["robot_y"].item(0))]
+    info["goal"]  = [float(ep["goal_x"].item(0)),  float(ep["goal_y"].item(0))]
+    info["final"] = [float(ep["robot_x"].tail(1).item()),
+                     float(ep["robot_y"].tail(1).item())]
+    info["n_obs"] = int(ep["n_obs"].item(0))
+    return info
+
+
+def _render_one_world(task):
+    (parquet_path, out_path, idx, diff, fps, size, crf) = task
+    info = render_world_gif(Path(parquet_path), Path(out_path), idx, diff,
+                            fps=fps, size=size, crf=crf)
+    info["world_idx"] = idx
+    info["difficulty"] = diff
+    info["webm"] = Path(out_path).name
+    return info
 
 
 def main() -> int:
+    import multiprocessing as mp
+    import os
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
     p = argparse.ArgumentParser()
     p.add_argument("--per-world-dir", required=True)
     p.add_argument("--classified", required=True)
@@ -221,6 +311,8 @@ def main() -> int:
     p.add_argument("--size", type=int, default=SIZE, help="output pixel size (square)")
     p.add_argument("--crf", type=int, default=33,
                    help="quality: lower = better. h264 default 28, vp9 default 33")
+    p.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1),
+                   help="parallel renders. Default = cpu_count-1.")
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -228,6 +320,7 @@ def main() -> int:
     classified = json.loads(Path(args.classified).read_text())
 
     paths = sorted(Path(args.per_world_dir).glob("world_*.parquet"))[:args.max_worlds]
+    tasks = []
     for path in paths:
         m = re.match(r"world_(\d+)", path.stem)
         if not m:
@@ -235,9 +328,52 @@ def main() -> int:
         idx = int(m.group(1))
         diff = classified.get(str(idx), {}).get("difficulty", "?")
         out_path = out_dir / f"world_{idx:03d}.{args.ext}"
-        info = render_world_gif(path, out_path, idx, diff,
-                                fps=args.fps, size=args.size, crf=args.crf)
-        print(f"world_{idx:03d} ({diff}): {info}")
+        tasks.append((str(path), str(out_path), idx, diff,
+                      args.fps, args.size, args.crf))
+
+    world_infos: dict[int, dict] = {}
+    workers = max(1, args.workers)
+    if workers == 1:
+        for t in tasks:
+            info = _render_one_world(t)
+            world_infos[t[2]] = info
+            print(f"world_{t[2]:03d} ({t[3]}): verdict={info.get('verdict')}")
+    else:
+        # spawn — cv2/imageio/polars don't survive fork-after-import.
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
+            futures = {ex.submit(_render_one_world, t): t for t in tasks}
+            for fut in as_completed(futures):
+                t = futures[fut]
+                info = fut.result()
+                world_infos[t[2]] = info
+                print(f"world_{t[2]:03d} ({t[3]}): verdict={info.get('verdict')}")
+
+    # Aggregate verdicts → info.json sibling.
+    ordered = [world_infos[k] for k in sorted(world_infos)]
+    verdict_counts: dict[str, int] = {}
+    for info in ordered:
+        v = info.get("verdict", "ongoing")
+        verdict_counts[v] = verdict_counts.get(v, 0) + 1
+    total = len(ordered)
+    summary = {
+        "n_worlds":       total,
+        "verdict_counts": verdict_counts,
+        "verdict_pct":    {k: round(100.0*v/total, 2) for k, v in verdict_counts.items()}
+                          if total else {},
+        "fps":            args.fps,
+        "size":           args.size,
+    }
+    info_path = out_dir / "info.json"
+    info_path.write_text(json.dumps(
+        {"summary": summary, "worlds": ordered}, indent=2))
+
+    print()
+    print(f"=== {total} worlds rendered ===")
+    for k in sorted(verdict_counts):
+        v = verdict_counts[k]
+        print(f"  {k:<14} {v:4d}  ({100*v/total:.1f}%)")
+    print(f"info: {info_path}")
     return 0
 
 

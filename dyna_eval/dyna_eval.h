@@ -23,9 +23,21 @@
 #include "../shared/lidar.h"
 #include "../shared/traj_gen.h"
 #include "../shared/world_loader.h"
+#include "../shared/costmap.h"
 
 #define MAX_OBSTACLES 30
-#define OBS_DIM (LIDAR_BEAMS + 2)
+// Obs format MUST match dyna_train (see dyna_train/dyna_train.h). Toggle the
+// same switch when changing arches. When OBS_MODE_COSTMAP=1, obs is
+//   [costmap (64*64) | v | w | goal_dx_body | goal_dy_body] = 4100 floats.
+// When 0, obs is [lidar (720) | v | w | goal_dx_body | goal_dy_body] = 724.
+#define OBS_MODE_COSTMAP 1
+#if OBS_MODE_COSTMAP
+#  define OBS_EXTRA 4
+#  define OBS_DIM (COSTMAP_SIZE + OBS_EXTRA)
+#else
+#  define OBS_EXTRA 4
+#  define OBS_DIM (LIDAR_BEAMS + OBS_EXTRA)
+#endif
 #define COLLISION_DIST (JACKAL_RADIUS + OBSTACLE_RADIUS)
 #define DEFAULT_ARENA_SIZE 20.0f
 #define DEFAULT_MAX_STEPS 600
@@ -37,14 +49,17 @@
 //   goal : x=-9, y=0          (inside the room, near the back wall)
 //   room : 3-walled at x=-10, y=+10, y=-10. Open on +x.
 //   success: |Δx|<0.3 AND |Δy|<0.3  (L∞ box; check_goal_node.py:arrival_gaol)
-//   eval-time velocity cap: v_x ∈ [-0.5, 0.5] m/s  (move_base local planner;
-//     base_local_planner_params.yaml max_vel_x = 0.5)
+//   robot max linear v = 2.0 m/s  (paper Fig. 3 caption; baselines use
+//     v ∈ [−0.5, 2.0] per §IV-b). The 0.5 m/s figure that lived here
+//     before (2026-05-17 fix) came from move_base's base_local_planner_
+//     params.yaml — that is the classical-planner baseline's local-planner
+//     cap, NOT the env spec. Aligning eval with train (train_v_max=2.0).
 #define EVAL_START_X  12.0f
 #define EVAL_START_Y   0.0f
 #define EVAL_START_TH  ((float)M_PI)    // facing −x (into the open mouth)
 #define EVAL_GOAL_X   -9.0f
 #define EVAL_GOAL_Y    0.0f
-#define EVAL_VMAX_MOVEBASE 0.5f         // paper's move_base local planner cap
+#define EVAL_VMAX_PAPER 2.0f            // paper max linear speed (Fig. 3 caption)
 
 #define WIDTH 720
 #define HEIGHT 720
@@ -184,18 +199,32 @@ static inline void update_obstacles(DynaEval* env) {
 }
 
 static inline void compute_obs(DynaEval* env) {
+    // Mirror dyna_train/dyna_train.h:compute_obs so the policy sees the
+    // exact same obs layout. LiDAR is always computed (needed by costmap
+    // path; cheap), then either rasterised or written as raw normalized
+    // beams, followed by the 4 extras (v, w, gx_body, gy_body).
     float ranges[LIDAR_BEAMS];
     lidar_scan(&env->robot, 0.5f * env->arena_size,
                env->obs_x, env->obs_y, env->num_obstacles, ranges);
+
+#if OBS_MODE_COSTMAP
+    costmap_rasterize(ranges, env->observations);
+    int extras_off = COSTMAP_SIZE;
+#else
     for (int i = 0; i < LIDAR_BEAMS; i++) {
         env->observations[i] = ranges[i] / LIDAR_RANGE;
     }
+    int extras_off = LIDAR_BEAMS;
+#endif
+
     float gx_b, gy_b;
     to_body_frame(env->goal_x - env->robot.x,
                   env->goal_y - env->robot.y,
                   env->robot.theta, &gx_b, &gy_b);
-    env->observations[LIDAR_BEAMS]     = gx_b;
-    env->observations[LIDAR_BEAMS + 1] = gy_b;
+    env->observations[extras_off + 0] = env->robot.v;
+    env->observations[extras_off + 1] = env->robot.w;
+    env->observations[extras_off + 2] = gx_b;
+    env->observations[extras_off + 3] = gy_b;
 }
 
 void init(DynaEval* env) {

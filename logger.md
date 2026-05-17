@@ -492,3 +492,114 @@ This isn't a 5B-vs-500M issue — it's a reward-design issue triggered by
 the new kinematic envelope. Followups in exp_tracker.md (reduce
 collision_penalty, add per-step time penalty, add goal-attraction Gaussian,
 consider warmstart from 500M_poly).
+
+## 2026-05-17 — Two env-correctness bug fixes (obstacle freeze + speed asymmetry)
+
+**Changes:** `shared/obstacle.h`, `dyna_train/dyna_train.ini`
+**Commit:** see this commit.
+
+While reviewing the 1B `3o0got0g` ckpt's WebMs we noticed obstacles **freeze
+in place for the last ~17 s of every 80 s episode**. Tracing it: `n_steps()`
+in `shared/motion.h` computes `(MOTION_T_END / MOTION_DT_SAMPLE) + 1 = 81`
+waypoints, then clamps to `MAX_WAYPOINTS_PER_OBS = 64`. Result: last
+waypoint at t=63 s, and `obstacle_position` clamps to it for tau ≥ 63 s.
+Bumped `MAX_WAYPOINTS_PER_OBS` 64→128. Cost: +2.8 KB per env state struct,
+trivial. Effect on training: removes the "wait it out for 17 s" exploit
+the policy could exploit.
+
+Separately: `dyna_train.ini` had `train_v_max=0.5` (matching `move_base`'s
+local-planner cap) while obstacles can move at `speed ∈ [0.3, 2.0]` m/s.
+With obstacles up to 4× the robot's speed the env was often unsolvable.
+Per the paper Fig. 3 caption the robot max speed is **2.0 m/s** (baselines
+use `v ∈ [-0.5, 2.0]`, see paper §IV-b). Bumped `train_v_max` 0.5→2.0,
+kept `train_v_min=-0.5` for the same paper-baseline asymmetric range.
+
+## 2026-05-17 — Eval v_max bug — was clipping policy at 0.5 m/s
+
+**Changes:** `dyna_eval/dyna_eval.h`, `dyna_eval/dyna_eval.c`
+**Commit:** see this commit.
+
+`dyna_eval.h` had `EVAL_VMAX_MOVEBASE = 0.5f` (used as the default
+`v_max_clip` in the standalone driver), with a comment claiming it matched
+the paper. Wrong: 0.5 m/s is the `base_local_planner_params.yaml` cap for
+the classical-planner *baseline*, not the env spec. Paper Fig. 3 caption +
+§IV-b say robot v_max = 2.0 m/s.
+
+Effect: every paper-eval we'd run for a CNN-era ckpt was capping the policy
+at 0.5 m/s when it was trained against the 2.0 m/s envelope. That single
+bug explained the "0% paper eval" for beta=10 `e7sadb3v` — after fixing
+the clip, the same ckpt scores **44.7 % overall** (above LfH-CP's 30.83 %
+SOTA).
+
+Renamed `EVAL_VMAX_MOVEBASE` → `EVAL_VMAX_PAPER = 2.0f` so the name no
+longer lies. Updated the inline doc-comment to spell out the source of
+each number.
+
+## 2026-05-17 — INI-driven env config + `--csv` → `--traj` rename
+
+**Changes:** new `shared/ini.h`, `dyna_train/dyna_train.c`,
+              `dyna_eval/dyna_eval.c`, `run_eval_published.sh`
+**Commit:** see this commit.
+
+`dyna_train.c::make_env`'s defaults had drifted from `dyna_train.ini` (the
+file PufferLib's training path actually reads). Standalone driver was
+using stale defaults (arena=20, mw_poly only) while training used the
+.ini's (arena=24, motion mix). Added a minimal C INI parser
+(`shared/ini.h`, ~120 lines) so both paths read the same .ini. CLI flags
+in `main()` now override .ini values post-construction. Precedence:
+built-in fallback < INI < CLI override.
+
+Also renamed `--csv` → `--traj` in both standalone drivers (kept `--csv`
+as an alias for back-compat). The output was never CSV — it's a packed
+C struct binary dump consumed by `tools/bake_traj_parquet.py`. The flag
+name was a lie since day one.
+
+## 2026-05-17 — Per-episode clean-reach telemetry baked into traj dumps
+
+**Changes:** `dyna_train/dyna_train.c` (Row struct, magic
+              0x44594E41→0x44594E42), `tools/bake_traj_parquet.py`,
+              `tools/render_eval_gifs.py`
+**Commit:** see this commit.
+
+The renderer's green/red box for "success" used the per-tick `outcome`
+field, which in our `terminate_on_goal=0` mode fires on **any** episode
+where the goal counter ever incremented — even if the robot collided
+**before** reaching. So WebMs labeled as "success" included episodes where
+the robot bumped its way to the goal.
+
+Fix: append five `int32` fields to the Row struct
+(`ep_reached, ep_collided, ep_clean_reach, ep_strict, ep_n_collisions`),
+populated only on the row that closes the episode. Computed from
+diffs of cumulative log counters (env has already incremented them
+before calling its internal `c_reset`). Magic bumped 'DYNA'→'DYNB' so
+old readers fail loudly. `bake_traj_parquet.py` dispatches on magic and
+broadcasts the per-episode flags to every tick of that episode at bake
+time, so the parquet has them as per-tick columns.
+
+`render_eval_gifs.py` now derives a `verdict` string from the new
+fields: `clean_reach` (green) only when reached **and** no collision
+before first reach; `reached_dirty` (olive) when reached after a
+collision; `collision` (red) when never reached but collided;
+`timeout` (amber) when neither. Falls back to outcome-based labelling
+for legacy DYNA dumps.
+
+## 2026-05-17 — New `tools/render_train_dist_webms.py` + parallelism
+
+**Changes:** new `tools/render_train_dist_webms.py`; parallelised
+              `tools/render_eval_gifs.py`
+**Commit:** see this commit.
+
+Train-distribution rendering (multiple episodes per parquet, random
+spawn/goal each ep) didn't fit `render_eval_gifs.py`'s assumption of one
+parquet per fixed world. Added a small wrapper that splits the
+multi-episode parquet into temp per-episode parquets, hands them to
+the per-episode renderer, and writes a sibling `info.json` inside the
+webm dir with verdict counts + per-episode metadata (start/goal/n_obs/
+n_collisions/etc).
+
+Both renderers parallelised via `ProcessPoolExecutor` with `mp.get_context("spawn")`
+(default `fork` deadlocks because cv2/imageio/polars don't survive
+fork-after-import). Default `--workers = cpu_count - 1`. Speedup is
+near-linear up to physical cores: ~10 min sequential → ~30-40 s with
+24 workers on the 32-core box.
+

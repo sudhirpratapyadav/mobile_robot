@@ -16,7 +16,12 @@
 #include <stdbool.h>
 
 #define OBSTACLE_RADIUS    0.5f       // per DynaBARN paper §III-A
-#define MAX_WAYPOINTS_PER_OBS  64     // compile-time cap
+// Compile-time cap on waypoints per trajectory. Bumped 64→128 (2026-05-17)
+// because n_steps() in motion.h clamps to this when MOTION_T_END=80s and
+// MOTION_DT_SAMPLE=1s would otherwise need 81 entries — silently truncating
+// trajectories at t=63s and freezing obstacles for the final 17s of every
+// 80s episode. 128 gives headroom for longer episodes or finer DT_SAMPLE.
+#define MAX_WAYPOINTS_PER_OBS  128    // compile-time cap
 
 typedef struct {
     int num_waypoints;                // ≥ 1

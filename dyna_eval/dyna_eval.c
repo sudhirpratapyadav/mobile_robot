@@ -1,8 +1,9 @@
 // dyna_eval.c — Standalone driver for DynaBARN-style eval.
 // CLI:
-//   ./dyna_eval --csv out.bin --load ckpt.bin --difficulty {0|1|2}
+//   ./dyna_eval --traj out.bin --load ckpt.bin --difficulty {0|1|2}
 //               --episodes N --world-seed-base S --max-steps K
 // Random/zero baselines via --mode {random|zero|fixed}.
+// (--csv is accepted as a back-compat alias for --traj.)
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -57,7 +58,7 @@ typedef struct {
 } Row;
 
 int main(int argc, char** argv) {
-    const char* csv = NULL;
+    const char* traj = NULL;
     const char* load = NULL;
     const char* world_file = NULL;
     int mode = 0;
@@ -71,13 +72,13 @@ int main(int argc, char** argv) {
     float goal_radius = 0.5f;
     // Default to the corrected paper-eval geometry; CLI can override.
     int   open_front    = 1;
-    float v_max_clip    = EVAL_VMAX_MOVEBASE;   // 0.5 m/s
+    float v_max_clip    = EVAL_VMAX_PAPER;      // 2.0 m/s — matches train
     float goal_box_half = 0.3f;                 // paper arrival_gaol
     float a_max         = 10.0f;                // paper acc_lim_x
     float alpha_max     = 20.0f;                // paper acc_lim_theta
 
     for (int i = 1; i < argc; i++) {
-        if      (!strcmp(argv[i], "--csv") && i+1 < argc)              csv = argv[++i];
+        if      ((!strcmp(argv[i], "--traj") || !strcmp(argv[i], "--csv")) && i+1 < argc) traj = argv[++i];
         else if (!strcmp(argv[i], "--load") && i+1 < argc)             load = argv[++i];
         else if (!strcmp(argv[i], "--world-file") && i+1 < argc)       world_file = argv[++i];
         else if (!strcmp(argv[i], "--mode") && i+1 < argc) {
@@ -101,9 +102,9 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--alpha-max") && i+1 < argc)        alpha_max = atof(argv[++i]);
     }
 
-    if (csv) {
-        FILE* f = fopen(csv, "wb");
-        if (!f) { fprintf(stderr, "fopen %s\n", csv); return 1; }
+    if (traj) {
+        FILE* f = fopen(traj, "wb");
+        if (!f) { fprintf(stderr, "fopen %s\n", traj); return 1; }
         int header[4] = {0x44594E45, episodes, MAX_OBSTACLES, LIDAR_BEAMS};
         fwrite(header, sizeof(int), 4, f);
 
