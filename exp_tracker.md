@@ -891,6 +891,10 @@ extending further.
 | beta=50 (1w2zazvt) | 7 % | 52 % | 0 % | 86.8 % | 13.2 % |
 | HIST=2 + beta=10 (891sg5v4) | 0 % | 0 % | 0 % | 0 % | 100 % |
 | beta=10 + succ=5 + coll=5 (4dabm514) | 52 % | 88 % | 26.7 % | 46 % | 27 % |
+| beta=10 + h256 (jm45ebyr) | 0 % | 0 % | 0 % | 94 % | 6 % |
+| --slowly + CNN HIST=1 (n2sycdre) | n/a (eval blocked) | n/a | 0.3 % wandb | n/a | n/a |
+| beta=10 + arena=20 (7m5b0pm6) | 53 % | 94 % | 36.8 % | 36.7 % | 25.0 % |
+| beta=20 (pnt5yya4) | 56 % | 91 % | 15.3 % | 59 % | 25 % |
 
 vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
@@ -918,6 +922,58 @@ initial random-action distribution. Native MLP encoder is the wrong tool
 for stacked obs — that's a CNN-shaped problem.
 **Followup:** Skip Axis 1.2 (HIST=5 with MLP would be worse). Switch to
 A2.2 (CNN via --slowly) at HIST=1 first.
+
+---
+
+### `pnt5yya4` — β=20 baseline ablation — REGRESSED
+
+**Trained:** 2026-05-18 ~03:28 UTC, GPU 0
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/pnt5yya4
+**Hypothesis:** Beta sweep was 1 (36% TD), 10 (67% TD, 44.7% paper ⭐),
+50 (7% TD, 0% paper). Sweet spot is somewhere — try β=20 to see if the
+peak extends right or β=10 is sharp.
+**Config delta:** `--env.beta 20.0`. Everything else identical to e7sadb3v.
+**Result (train-dist, 100 ep):** clean_reach 56% (−11 pp), reached_dirty 35%.
+**Result (paper-eval, 600 trials):** Overall **15.3%** (−29 pp). Easy 20.5%,
+Medium 18.5%, Hard 7.0%.
+**Observations:**
+  - Train-dist degraded mildly (56 vs 67), but paper crashed
+    disproportionately. This is the same pattern as β=50 (just less
+    severe): excess repulsion teaches over-cautious policy that
+    transfers worse to OOD fixed geometry.
+  - Mid-ckpt (445M) eval was nearly identical (TD 58%, paper 15.2%),
+    so the regression is stable not transient.
+**Conclusion:** β=10 is a sharp peak. β=15 likely also worse. The
+repulsion ↔ attraction balance is precisely 10 for our env.
+**Followup:** Stop trying β values away from 10. Lever moves elsewhere.
+
+---
+
+### `7m5b0pm6` — β=10 + arena=20 + min_init_goal=10 — MIXED
+
+**Trained:** 2026-05-17 ~21:01 UTC, GPU 1
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/7m5b0pm6
+**Hypothesis:** Smaller train-arena (20 m, matching eval) should improve
+generalization by removing the size mismatch. Tests "distribution match
+of arena helps."
+**Config delta:** `--env.arena-size 20.0 --env.min-init-goal-dist 10.0`
+(everything else identical to e7sadb3v).
+**Result (train-dist, 100 ep, arena=20):**
+clean_reach **53 %** (−14 pp), reached_dirty 41 %, collision 5 %, timeout 1 %.
+**Result (paper-eval, 600 trials):**
+Overall **36.8 %** (−7.9 pp). Easy **32 %** (−23.5 pp), Medium **39 %**
+(−5.5 pp), Hard **39.5 %** (**+5.5 pp**).
+**Observations:**
+  - Per-difficulty trend is interesting: easy degraded most, hard
+    improved. Hypothesis: tighter training arena → policy practices
+    obstacle-density-heavy scenarios more often, transferring to hard
+    bin where obstacle count is highest.
+  - Overall regression: arena-size match wasn't worth the easy-case
+    skill loss.
+**Conclusion:** Don't shrink arena. The 24 m default lets the policy
+practice both open navigation (easy) and dense routing (hard).
+**Followup:** Try the OPPOSITE — bigger arena (28 / 32) to see if
+even more open space helps easy/medium further.
 
 ---
 
