@@ -998,6 +998,25 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `zbfjl55j` (group: `beta10_all6_motion`) — re-enable reciprocating + random_walk
+
+**Trained:** 2026-05-18 ~14:42 UTC, GPU 1, 500M
+**Config delta vs e7sadb3v:** `--env.mw-reciprocating 2 --env.mw-random-walk 2`.
+All 6 motion families active (was: linear=4 poly=2 sinusoidal=2 stationary=1
+reciprocating=0 random_walk=0).
+**Wandb final:** clean=0.36, success=0.95, coll=0.88, final_d=1.07.
+**Train-dist:** clean_reach **61 %** (+10 pp vs e7sadb3v's 51 %).
+**Paper-eval:** **19.7 %** (E 16 / M 25 / H 18) — big drop from 44.7.
+**Diagnosis:** Train distribution broadened (more motion variety), TD-clean
+up. But paper-eval's baked .world files have narrower obstacle motion
+(mostly polynomial trajectories), so policy that trains across 6 motion
+families ends up under-specialised for the paper's distribution.
+**Under purpose.md lens:** TD-clean win (generality), paper drop (over-broad
+for this specific eval set). Real generalist behavior but doesn't
+benefit paper-eval.
+
+---
+
 ### `4ziz0o5p` (group: `beta10_arena40_obs8to30`) — arena=40 + density-matched obs 8-30 — 🆕 NEW BEST
 
 **Trained:** 2026-05-18 ~14:18 UTC, GPU 0, 500M
