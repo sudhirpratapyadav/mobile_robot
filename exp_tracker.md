@@ -407,7 +407,7 @@ Eval with accel limits at deploy:
 
 ---
 
-### `b3vm6fej` — 5B poly with v_max=0.5 + accel limits — **COLLAPSED**
+### `b3vm6fej` (group: `poly_v05_accel`) — 5B poly with v_max=0.5 + accel limits — **COLLAPSED**
 
 **Trained:** 2026-05-14 18:53 → 2026-05-15 ~00:35 (~5h 45m on single GPU)
 **Branch / commit:** `c23c592` (.ini at this commit)
@@ -475,7 +475,7 @@ adding back kinematic realism.
 
 ---
 
-### `ukwnlxj3` — 100M option-C reward (collision↓ + time penalty + goal-attr)
+### `ukwnlxj3` (group: `rewardC`) — 100M option-C reward (collision↓ + time penalty + goal-attr)
 
 **Trained:** 2026-05-15 05:58 → 06:05 (~7 min)
 **Branch / commit:** `ef867de`
@@ -558,7 +558,7 @@ Dyna-LfLH parity. Need to scale to find the ceiling.
 
 ---
 
-### `v6r7zeja` — 500M costmap obs (G1) + option-C reward — **COLLAPSED**
+### `v6r7zeja` (group: `costmap_v05_accel_rewardC`) — 500M costmap obs (G1) + option-C reward — **COLLAPSED**
 
 **Trained:** 2026-05-15 ~07:30 → 08:18 (~48 min, 21 ckpts)
 **Branch / commit:** `a877a1e`
@@ -670,7 +670,7 @@ off speed-to-goal vs. collision risk. User's plan: sweep collision_penalty
 
 ---
 
-### `ec6rd1tq` — dense obstacle repulsion (β=1, σ_o=0.8, 200M)
+### `ec6rd1tq` (group: `costmap_3gauss_repuls`) — dense obstacle repulsion (β=1, σ_o=0.8, 200M)
 
 **Trained:** 2026-05-16 ~19:00 (~21 min wall, 9 ckpts saved)
 **Branch / commit:** `463c199`
@@ -743,7 +743,7 @@ by not moving, which gives 100% timeout.
 
 ---
 
-### `lptujnh0` — 500M, v_max=2.0 + obstacle-freeze bug fix, beta=1
+### `lptujnh0` (group: `v_max_2_freeze_fix`) — 500M, v_max=2.0 + obstacle-freeze bug fix, beta=1
 
 **Trained:** 2026-05-17 ~05:35 UTC
 **Branch / commit:** post obstacle-freeze fix (`MAX_WAYPOINTS_PER_OBS 64→128`)
@@ -779,7 +779,7 @@ clean_reach climbs.
 
 ---
 
-### `e7sadb3v` — 500M, beta=10 (10× obstacle repulsion) ⭐ best so far
+### `e7sadb3v` (group: `beta10_v_max_2`) — 500M, beta=10 (10× obstacle repulsion) ⭐ best so far
 
 **Trained:** 2026-05-17 ~09:10 UTC
 **Branch / commit:** as `lptujnh0` + `--env.beta 10.0` CLI override.
@@ -814,7 +814,7 @@ not policy failure).
 
 ---
 
-### `8wxdf0mh` — 500M, beta=10 + `terminate_on_goal=1` — REGRESSION
+### `8wxdf0mh` (group: `beta10_term_on_goal`) — 500M, beta=10 + `terminate_on_goal=1` — REGRESSION
 
 **Trained:** 2026-05-17 ~14:40 UTC
 **Branch / commit:** as `e7sadb3v` + `--env.terminate-on-goal 1`.
@@ -847,7 +847,7 @@ a sizable `success_bonus` (≥ peak Gaussian × remaining steps, e.g. 200).
 
 ---
 
-### `1w2zazvt` — 500M, beta=50 (5× the beta=10 winner) — REGRESSION
+### `1w2zazvt` (group: `beta50_v_max_2`) — 500M, beta=50 (5× the beta=10 winner) — REGRESSION
 
 **Trained:** 2026-05-17 ~17:00 UTC
 **Branch / commit:** as `e7sadb3v` + `--env.beta 50.0`, terminate=0.
@@ -952,7 +952,7 @@ vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 
 ---
 
-### `891sg5v4` — HIST=2 stacked-costmap + native MLP+MinGRU, β=10 — FAILED
+### `891sg5v4` (group: `hist2_beta10`) — HIST=2 stacked-costmap + native MLP+MinGRU, β=10 — FAILED
 
 **Trained:** 2026-05-17 ~17:10 UTC, GPU 0
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/891sg5v4
@@ -974,7 +974,7 @@ A2.2 (CNN via --slowly) at HIST=1 first.
 
 ---
 
-### `npbclfh2` — β=10 + σ_o=0.5 (tighter repulsion) — MIXED, best easy
+### `npbclfh2` (group: `beta10_sigma05`) — β=10 + σ_o=0.5 (tighter repulsion) — MIXED, best easy
 
 **Trained:** 2026-05-18 ~06:20 UTC, GPU 1, 500M
 **Hypothesis:** σ_o controls repulsion shape; tighter σ → policy approaches
@@ -998,7 +998,7 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
-### `p3yf7hiq` — β=10 + obstacles 5-30 (denser) — FLATTER DIFFICULTY CURVE
+### `p3yf7hiq` (group: `beta10_obs5to30`) — β=10 + obstacles 5-30 (denser) — FLATTER DIFFICULTY CURVE
 
 **Trained:** 2026-05-18 ~11:54 UTC, GPU 1, 500M
 **Config delta:** `--env.num-obstacles-min 5 --env.num-obstacles-max 30`.
@@ -1020,7 +1020,7 @@ the broad-arena win while restoring density.
 
 ---
 
-### `40qb3qf0` — β=10 + arena=40 (walls far away) — TD-CLEAN CHAMPION (paper down)
+### `40qb3qf0` (group: `beta10_arena40`) — β=10 + arena=40 (walls far away) — TD-CLEAN CHAMPION (paper down)
 
 **Trained:** 2026-05-18 ~11:54 UTC, GPU 0, 500M
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/40qb3qf0
@@ -1055,7 +1055,7 @@ broader motion families, harder goal box, etc., while keeping arena=40.
 
 ---
 
-### `9ypq3hyf` — β=10 + obstacle speed_max=1.0 (down from 2.0) — REGRESSED
+### `9ypq3hyf` (group: `beta10_slow_obs`) — β=10 + obstacle speed_max=1.0 (down from 2.0) — REGRESSED
 
 **Trained:** 2026-05-18 ~06:20 UTC, GPU 0, 500M
 **Hypothesis:** Capping training obstacle speed at robot's forward max
@@ -1073,7 +1073,7 @@ distribution mismatch crushed generalization.
 
 ---
 
-### `29pby0gf` — β=10 + ent_coef=0.001 (10x lower entropy bonus) — REGRESSED
+### `29pby0gf` (group: `beta10_entropy001`) — β=10 + ent_coef=0.001 (10x lower entropy bonus) — REGRESSED
 
 **Trained:** 2026-05-18 ~05:44 UTC, GPU 1, 200M (capped early)
 **Hypothesis:** Lower entropy bonus → policy commits earlier to good
@@ -1087,7 +1087,7 @@ Default ent_coef=0.01 is right.
 
 ---
 
-### `jcah53tw` — β=10 + max_steps=400 (half-length episodes) — FAILED
+### `jcah53tw` (group: `beta10_steps400`) — β=10 + max_steps=400 (half-length episodes) — FAILED
 
 **Trained:** 2026-05-18 ~04:36 UTC, GPU 0, 500M
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/jcah53tw
@@ -1109,7 +1109,7 @@ shorten episodes.
 
 ---
 
-### `pnt5yya4` — β=20 baseline ablation — REGRESSED
+### `pnt5yya4` (group: `beta20`) — β=20 baseline ablation — REGRESSED
 
 **Trained:** 2026-05-18 ~03:28 UTC, GPU 0
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/pnt5yya4
@@ -1133,7 +1133,7 @@ repulsion ↔ attraction balance is precisely 10 for our env.
 
 ---
 
-### `7m5b0pm6` — β=10 + arena=20 + min_init_goal=10 — MIXED
+### `7m5b0pm6` (group: `beta10_arena20`) — β=10 + arena=20 + min_init_goal=10 — MIXED
 
 **Trained:** 2026-05-17 ~21:01 UTC, GPU 1
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/7m5b0pm6
@@ -1161,7 +1161,7 @@ even more open space helps easy/medium further.
 
 ---
 
-### `4dabm514` — β=10 + success_bonus=5 + collision_penalty=5 — REGRESSED
+### `4dabm514` (group: `beta10_succ5_coll5`) — β=10 + success_bonus=5 + collision_penalty=5 — REGRESSED
 
 **Trained:** 2026-05-17 ~18:31 UTC, GPU 1
 **Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/4dabm514
