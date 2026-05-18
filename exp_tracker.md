@@ -998,7 +998,40 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
-### `v6ec2njp` (group: `beta10_a40_obs8to40_fast`) — obs 8-40 + speed 0.5-3.0 — 🆕🆕 NEW BEST
+### `mndgrcil` (group: `beta10_a40_obs8to30_speed05to5`) — speed_max=5.0 — 🚀 MASSIVE NEW BEST
+
+**Trained:** 2026-05-18 ~23:30 UTC, GPU 0, 500M
+**Config delta vs 89tvdywf:** `--env.speed-max 5.0` (was 3.0/4.0).
+**Wandb final:** clean=0.25, success=1.00, coll=0.97, final_d=0.94.
+  *(wandb metric was misleading — actual paper performance is MUCH higher)*
+**Train-dist:** clean_reach 56 %, reached_dirty 44 %, ZERO collision.
+**Paper-eval (600 trials):** **75.0 %** 🚀
+  - **Easy: 85.0 %** (+29.5 pp vs e7sadb3v)
+  - **Medium: 78.5 %** (+34 pp)
+  - **Hard: 61.5 %** (+27.5 pp)
+  - Reach rate: **99.8 %** (599/600 not-timeout, only 1 timeout total)
+**vs DynaBARN paper SOTA (LfH-CP 30.83 %):** **+44 pp** 🎯
+
+**Diagnosis:** Faster training obstacles forced the policy to develop
+much more robust avoidance + planning behaviour. Speed_max=5.0 is way
+beyond any obstacle speed in paper-eval, but the **margin** the policy
+learned translates directly to better paper performance. Training on
+harder physics → robust policy.
+
+**Speed sweep is now monotonic AND continues climbing:**
+  speed_max  paper  E    M    H
+  2.0        44.7%  55.5 44.5 34.0
+  3.0        47.0%  48.5 49.5 43.0
+  4.0        47.8%  48.5 44.5 50.5
+  **5.0**    **75.0%** 85.0 78.5 61.5
+
+**This is the strongest single-axis discovery of the entire run.**
+Need to validate the +27pp jump from 4.0→5.0 is not measurement
+artifact. Followup: try speed_max=6.0, 7.0 to see if it keeps climbing.
+
+---
+
+### `v6ec2njp` (group: `beta10_a40_obs8to40_fast`) — obs 8-40 + speed 0.5-3.0 — PREVIOUS BEST
 
 **Trained:** 2026-05-18 ~22:31 UTC, GPU 0, 500M
 **Config delta vs 89tvdywf:** `--env.num-obstacles-max 40` (was 30). Denser
