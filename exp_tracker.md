@@ -998,6 +998,29 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `4ziz0o5p` (group: `beta10_arena40_obs8to30`) — arena=40 + density-matched obs 8-30 — 🆕 NEW BEST
+
+**Trained:** 2026-05-18 ~14:18 UTC, GPU 0, 500M
+**Config delta vs e7sadb3v:** `--env.arena-size 40.0
+--env.num-obstacles-min 8 --env.num-obstacles-max 30`. Wider arena +
+denser obstacles (8-30 in 1600 m² ≈ same per-m² as e7sadb3v's 3-20 in
+576 m²).
+**Wandb final:** clean=0.49, success=0.97, coll=0.84, final_d=0.94.
+**Train-dist (100 ep, matching cfg):** clean_reach **67 %**,
+reached_dirty 31 %, timeout 1 %, collision 1 % — **+16 pp vs e7sadb3v**.
+**Paper-eval (600 trials):** **46.7 %** ⭐ — **NEW HEADLINE**
+  - Easy: 46.5 % (−9 pp vs e7sadb3v's 55.5, only regression)
+  - Medium: **56.0 %** (+11.5 pp — BEST medium across all runs)
+  - Hard: **37.5 %** (+3.5 pp)
+**Why it wins both:** the bigger arena gives more spatial range for
+the policy to learn routing variety; the density match keeps the
+"actually need to avoid obstacles" signal intact (which arena=40 + 3-20
+lost). Together: a strictly broader distribution that produces a
+better generalist.
+**Vs LfH-CP SOTA:** 30.83 %. Ours +15.9 pp.
+
+---
+
 ### `8pfpn2ef` (group: `beta10_arena22`) — β=10 + arena=22 (midpoint)
 
 **Trained:** 2026-05-18 ~13:31 UTC, GPU 1, 500M
