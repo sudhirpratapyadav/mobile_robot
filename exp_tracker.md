@@ -1018,6 +1018,25 @@ most because that's where the broader speed distribution helps.
 
 ---
 
+### `zl1d60zk` (group: `beta10_a60_obs32to64`) — arena=60 (too big) — REGRESSED
+
+**Trained:** 2026-05-18 ~17:53 UTC, GPU 0, 500M
+**Config delta vs e7sadb3v:** `--env.arena-size 60 --env.num-obstacles-min 32
+--env.num-obstacles-max 64 --env.min-init-goal-dist 20`. Pushed arena
++50% above 4ziz0o5p. Density-matched to 4ziz0o5p's 0.012 obs/m².
+**Wandb final:** clean=0.40, success=0.96, coll=0.89, final_d=1.01.
+**Train-dist:** clean_reach 57 %.
+**Paper-eval:** **9.0 %** (E 6.5 / M 9.5 / H 11.0) — big drop from
+4ziz0o5p's 46.7 %.
+**Diagnosis:** Arena=60 is too far from paper's 20 m geometry. Even
+with density-matching, the spatial-scale mismatch destroys transfer.
+4ziz0o5p's 40 m was the sweet spot — far enough for spatial broadening,
+close enough for transfer. 60 m is over the cliff.
+**Conclusion:** Don't push arena past 40. 40 is the upper edge of
+useful broadening.
+
+---
+
 ### `l93dfs5q` (group: `beta10_a40_obs16to48`) — TRUE density match — REGRESSED
 
 **Trained:** 2026-05-18 ~17:34 UTC, GPU 1, 500M
