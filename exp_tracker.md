@@ -1043,6 +1043,19 @@ gains compound predictably along this axis.
 
 ---
 
+### `0x8w9mi4` (group: `beta10_a40_obs8to30_fast_minigd15`) — 89tvdywf + minigd=15
+
+**Trained:** 2026-05-18 ~23:39 UTC, GPU 1, 500M
+**Config delta vs 89tvdywf:** `--env.min-init-goal-dist 15.0` (was 12).
+**Wandb final:** clean=0.35, success=0.99, coll=0.91, final_d=1.03.
+**Train-dist:** clean_reach 58 %.
+**Paper-eval:** **48.2 %** (E 61.0 / M 47.5 / H 36.0).
+**Diagnosis:** Slightly harder start-goal distance trades hard (-7 pp
+vs 89tvdywf) for easy (+12.5 pp). Net +1.2 pp overall. Probably useful
+combined with denser obs (v6ec2njp recipe).
+
+---
+
 ### `89tvdywf` (group: `beta10_a40_obs8to30_fast`) — 4ziz0o5p + speed 0.5-3.0 — PREVIOUS BEST
 
 **Trained:** 2026-05-18 ~18:48 UTC, GPU 1, 500M
