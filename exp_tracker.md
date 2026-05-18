@@ -998,7 +998,31 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
-### `89tvdywf` (group: `beta10_a40_obs8to30_fast`) — 4ziz0o5p + speed 0.5-3.0 — 🆕 NEW BEST
+### `8ke7ss8y` (group: `beta10_a40_obs8to30_speed05to4`) — speed 0.5-4.0 — 🆕 NEW BEST
+
+**Trained:** 2026-05-18 ~22:15 UTC, GPU 1, 500M
+**Config delta vs 89tvdywf:** `--env.speed-max 4.0` (was 3.0). Even faster
+obstacles.
+**Wandb final:** clean=0.30, success=0.99, coll=0.95, final_d=0.93.
+**Train-dist:** clean_reach 60 %, reached_dirty 38 %, coll 1 %, timeout 1 %.
+**Paper-eval (600 trials):** **47.8 %** — NEW HEADLINE
+  - Easy: 48.5 % (tied with 89tvdywf)
+  - Medium: 44.5 % (−5 pp vs 89tvdywf, same as e7sadb3v)
+  - **Hard: 50.5 %** (+7.5 pp vs 89tvdywf, +16.5 pp vs e7sadb3v) ⭐⭐
+**Speed sweep so far:**
+  - speed_max=2.0 (e7sadb3v): paper 44.7%, hard 34.0%
+  - speed_max=3.0 (89tvdywf):  paper 47.0%, hard 43.0%
+  - speed_max=4.0 (8ke7ss8y):  paper 47.8%, hard **50.5%**
+  Monotonic hard improvement, slight trade-off on med/easy.
+**Diagnosis:** Faster training obstacles force policy to handle high
+relative velocities → directly addresses paper's hard bin (which has
+fast obstacles). The speed lever is the cleanest one we've found —
+gains compound predictably along this axis.
+**Vs LfH-CP SOTA:** 30.83 %. Ours **+17.0 pp**.
+
+---
+
+### `89tvdywf` (group: `beta10_a40_obs8to30_fast`) — 4ziz0o5p + speed 0.5-3.0 — PREVIOUS BEST
 
 **Trained:** 2026-05-18 ~18:48 UTC, GPU 1, 500M
 **Config delta vs 4ziz0o5p:** `--env.speed-min 0.5 --env.speed-max 3.0`.
