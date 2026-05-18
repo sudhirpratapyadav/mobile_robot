@@ -603,3 +603,50 @@ fork-after-import). Default `--workers = cpu_count - 1`. Speedup is
 near-linear up to physical cores: ~10 min sequential → ~30-40 s with
 24 workers on the 32-core box.
 
+## 2026-05-18 — Day-2 autonomous sweep + strategic pivot
+
+**Changes:** new `docs/purpose.md`; many `exp_tracker.md` entries; no
+code changes today besides the small `tools/eval_run.sh` patch (`bc`
+→ `python` for arena-half computation, support `[extra dyna_train flags]`).
+**Commit:** `fb15736`.
+
+Day-2 ran 12+ single-knob variations of `e7sadb3v`'s baseline. ALL
+regressed on paper-eval. Pattern findings:
+
+1. **wandb `env/success_clean_reach` is uncorrelated with paper-eval.**
+   `e7sadb3v` at 105 M wandb peak: paper 11.2 %; at 500 M: paper 44.7 %.
+   `40qb3qf0` arena=40: wandb 0.68 best ever, paper 26 %.
+2. **TD-clean and paper-success are weakly correlated** (several variants
+   with TD-clean ≥ e7sadb3v had worse paper).
+3. **PufferLib native ignores `--train.seed`** — bit-identical ckpts
+   across seeds confirmed via MD5. Multi-seed variance checks are
+   no-ops; need different env config to get any variance signal.
+4. **σ_o sweep is a knife-edge** at 0.8 — 0.75 collapses to 4.5 %, 1.0
+   collapses to 1 %.
+5. **Cheap single-knob sweeps are exhausted.** Every config delta
+   regressed.
+
+**Pivot logged in `docs/purpose.md`:** optimisation target switched
+from paper-eval → train-distribution `clean_reach`. The project goal
+is a generalist; paper-eval is a byproduct. Re-reading prior
+"regressions" under this lens, `40qb3qf0` (arena=40) becomes the new
+TD-clean champion at **80 %** (vs e7sadb3v 51 %), even though paper
+dropped.
+
+Also: arena=40 win has a **density caveat** — holding obs count fixed
+at 3-20 while expanding 24→40 m drops density to 0.36×. The TD-clean
+jump may be partly an "easier env" artefact. Follow-up queued:
+arena=40 + obs 8-30 (density-matched).
+
+**Other notable result:** `p3yf7hiq` (obs 5-30 at arena=24) **flattened
+difficulty curve**: hard +10 pp (34 → 44 %) at the cost of easy
+(55.5 → 35 %). Net paper 41 % vs e7sadb3v's 44.7 % — slightly behind
+but with more even per-difficulty performance.
+
+**Infra incidents:**
+* Disk filled (EXTDRIVE 100 %) twice during today's runs; cleaned by
+  deleting `100ep.bin/.parquet` (regeneratable) and pruning all but
+  the final 499.9 M ckpt per run.
+* `exp_tracker.md` got truncated to 0 bytes by ENOSPC during a write;
+  restored from git (commits `5b15f5a` and `18acd94`).
+

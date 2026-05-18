@@ -998,6 +998,28 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `p3yf7hiq` — β=10 + obstacles 5-30 (denser) — FLATTER DIFFICULTY CURVE
+
+**Trained:** 2026-05-18 ~11:54 UTC, GPU 1, 500M
+**Config delta:** `--env.num-obstacles-min 5 --env.num-obstacles-max 30`.
+Everything else = e7sadb3v.
+**Wandb final:** success=0.96, success_clean_reach=0.25, collision=0.95
+(very high — denser env stresses policy).
+**Train-dist (100 ep, matching cfg):** clean_reach 47 %, reached_dirty 49 %,
+collision 4 % — slightly below e7sadb3v's 51 %.
+**Paper-eval:** **41.0 %** overall.
+  - Easy: 35 % (−20.5 pp vs e7sadb3v)
+  - Medium: 44 % (≈ same)
+  - **Hard: 44 % (+10 pp vs e7sadb3v's 34 %)** ⭐
+**Observation:** Difficulty curve FLATTENED. Hard transferred much
+better; easy degraded. Net paper-eval close to e7sadb3v (41 vs 44.7)
+but with more even per-difficulty performance — more like a generalist.
+**Under purpose.md lens:** TD-clean slightly worse, but the policy is
+more robust across difficulty. Worth combining with arena=40 to keep
+the broad-arena win while restoring density.
+
+---
+
 ### `40qb3qf0` — β=10 + arena=40 (walls far away) — TD-CLEAN CHAMPION (paper down)
 
 **Trained:** 2026-05-18 ~11:54 UTC, GPU 0, 500M
