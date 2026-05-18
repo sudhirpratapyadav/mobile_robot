@@ -998,6 +998,26 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `l93dfs5q` (group: `beta10_a40_obs16to48`) — TRUE density match — REGRESSED
+
+**Trained:** 2026-05-18 ~17:34 UTC, GPU 1, 500M
+**Config delta:** `--env.arena-size 40 --env.num-obstacles-min 16
+--env.num-obstacles-max 48`. Properly density-matched to e7sadb3v
+(density 0.020 obs/m²). Required the MAX_OBSTACLES 30→64 bump.
+**Wandb final:** clean=0.48, success=0.96, coll=0.92, final_d=1.05.
+**Train-dist:** clean_reach 60 %.
+**Paper-eval:** **10.8 %** (E 4.5 / M 14.5 / H 13.5) — big drop from
+4ziz0o5p's 46.7 %.
+**Diagnosis:** **The 4ziz0o5p win was NOT from density-matching.**
+True density-match (16-48 at arena=40) regresses paper-eval. 4ziz0o5p
+sits at density 0.012 obs/m² — actually *less* dense than e7sadb3v's
+0.020. The win came from "bigger arena, but obstacles still mostly
+clear paths" — a specific sweet spot, not a smooth function of arena
+size and density. Higher density at arena=40 → over-cautious policy
+that times out on the paper's sparser worlds.
+
+---
+
 ### `xc4f2nqt` (group: `beta10_a30_obs5to25`) — arena=30 + obs 5-25 — COLLAPSED
 
 **Trained:** 2026-05-18 ~17:24 UTC, GPU 0, 500M
