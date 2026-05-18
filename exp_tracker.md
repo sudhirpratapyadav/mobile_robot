@@ -933,6 +933,13 @@ vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
    metric decays (which here it doesn't, despite wandb).
 4. xsob087y kill at 504M was likely a mistake driven by wandb metric;
    re-running with more focus on paper-eval drives next decisions.
+5. **PufferLib native backend ignores `--train.seed`** (re-confirmed
+   today via MD5 compare: e7sadb3v seed=42 and rwcyw8ef seed=7
+   produced bit-identical ckpts). Multi-seed "variance checks" on
+   native are no-ops. Implication: σ_o sweep results are REAL
+   measurements, not seed noise. The non-monotonic landscape
+   (0.5→32.7%, 0.65→30.5%, 0.75→4.5%, 0.8→44.7%, 1.0→1%, 1.5→0%)
+   is the true shape.
 
 ---
 
