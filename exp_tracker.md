@@ -998,6 +998,26 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `89tvdywf` (group: `beta10_a40_obs8to30_fast`) — 4ziz0o5p + speed 0.5-3.0 — 🆕 NEW BEST
+
+**Trained:** 2026-05-18 ~18:48 UTC, GPU 1, 500M
+**Config delta vs 4ziz0o5p:** `--env.speed-min 0.5 --env.speed-max 3.0`.
+Faster obstacles (was 0.3-2.0).
+**Wandb final:** clean=0.38, success=0.97, coll=0.91, final_d=1.01.
+**Train-dist:** clean_reach 66 %, reached_dirty 31 %, coll 2 %, timeout 1 %.
+**Paper-eval (600 trials):** **47.0 %** — NEW HEADLINE
+  - Easy: 48.5 %
+  - Medium: 49.5 %
+  - Hard: **43.0 %** (best hard across ALL runs, +9 pp vs e7sadb3v, +5.5 pp vs 4ziz0o5p)
+**Difficulty curve:** 48.5 / 49.5 / 43.0 — most balanced of any run.
+**Diagnosis:** Faster training obstacles (max 3.0 m/s vs 2.0) lift hard-bin
+where dense fast motion dominates. Modest overall gain (+0.3pp vs
+4ziz0o5p) but with a real **generalist signal** — hard bin gains the
+most because that's where the broader speed distribution helps.
+**Vs LfH-CP SOTA:** 30.83 %. Ours +16.2 pp.
+
+---
+
 ### `l93dfs5q` (group: `beta10_a40_obs16to48`) — TRUE density match — REGRESSED
 
 **Trained:** 2026-05-18 ~17:34 UTC, GPU 1, 500M
