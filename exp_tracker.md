@@ -910,6 +910,7 @@ ckpt selection.
 | max_steps=400 (jcah53tw) | n/a | n/a | 1.7 % | 63 % | 35 % |
 | ent_coef=0.001 200M (29pby0gf) | 36 % | 92 % | 17.0 % | 76 % | 7 % |
 | obs speed_max=1.0 (9ypq3hyf) | 57 % | 93 % | 18.7 % | 55 % | 27 % |
+| σ_o=0.5 (npbclfh2) | 49 % | 98 % | 32.7 % | 67 % | 1 % |
 
 vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
@@ -951,6 +952,30 @@ initial random-action distribution. Native MLP encoder is the wrong tool
 for stacked obs — that's a CNN-shaped problem.
 **Followup:** Skip Axis 1.2 (HIST=5 with MLP would be worse). Switch to
 A2.2 (CNN via --slowly) at HIST=1 first.
+
+---
+
+### `npbclfh2` — β=10 + σ_o=0.5 (tighter repulsion) — MIXED, best easy
+
+**Trained:** 2026-05-18 ~06:20 UTC, GPU 1, 500M
+**Hypothesis:** σ_o controls repulsion shape; tighter σ → policy approaches
+obstacles closer before veering. Might trade hard-bin safety for
+overall directness.
+**Config delta:** `--env.sigma-o 0.5` (default 0.8).
+**Wandb final:** clean=0.42, **success=0.998** (basically always reaches),
+coll=0.91, final_d=0.50.
+**Result (TD):** clean_reach 49 %, reached_dirty 49 %, collision 2 %.
+**Result (paper, 600 trials):** **32.7 %** overall.
+  - Easy: **58.5 %** (BEST so far, +3 pp over e7sadb3v's 55.5)
+  - Medium: 25.5 % (−19 pp)
+  - Hard: 14.0 % (−20 pp)
+**Diagnosis:** Confirms hypothesis exactly — tighter repulsion = easier
+to thread sparse obstacles (easy), more crash-prone in dense (hard).
+σ_o trades easy-vs-hard performance. e7sadb3v's σ_o=0.8 is the better
+balance.
+**Conclusion:** Could potentially **mix** policies: σ_o=0.5-trained
+for easy, σ_o=0.8 for hard. Or sweep σ_o further to find ensemble peak.
+Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
