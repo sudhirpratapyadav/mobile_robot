@@ -998,6 +998,27 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `h8p5n9sr` (group: `beta10_a40_obs8to30_all6`) — COMBO: a40 + obs 8-30 + all-6-motion
+
+**Trained:** 2026-05-18 ~15:36 UTC, GPU 1, 500M
+**Config delta vs e7sadb3v:** `--env.arena-size 40 --env.num-obstacles-min 8
+--env.num-obstacles-max 30 --env.mw-reciprocating 2 --env.mw-random-walk 2`.
+Three broadening axes stacked.
+**Wandb final:** clean=0.58, success=0.97, coll=0.75, final_d=0.95.
+**Train-dist:** clean_reach **71 %** (NEW MAX TD-clean), reached_dirty 25 %.
+**Paper-eval:** **24.3 %** (E 28.5 / M 23.5 / H 21.0) — big drop from
+4ziz0o5p's 46.7 %.
+**Diagnosis:** TD-clean compounded as predicted (71 vs 67 vs 51), but
+paper crashed (24 vs 46.7). Same pattern as zbfjl55j: re-enabling
+reciprocating + random_walk broadens training too far from paper's
+narrow distribution. The all-6-motion addition fully overwhelms the
+arena+density gains.
+**Conclusion:** Don't add reciprocating/random_walk motion families if
+paper-eval matters at all. Genuinely broader generalist, but pays a
+heavy transfer cost.
+
+---
+
 ### `zbfjl55j` (group: `beta10_all6_motion`) — re-enable reciprocating + random_walk
 
 **Trained:** 2026-05-18 ~14:42 UTC, GPU 1, 500M
