@@ -883,10 +883,22 @@ extending further.
 
 ## Headline summary (2026-05-17 / 18)
 
+**CORRECTION (2026-05-18)**: The e7sadb3v "67 % TD clean" number cited
+below was from an earlier, different-config render. Re-running with the
+canonical eval_run.sh and seed=42 gives **51 %** TD clean for e7sadb3v.
+This rebases all subsequent comparisons — most "regressed on TD" calls
+were actually similar or slightly better on TD; the regressions are all
+on paper-eval which is the lever that actually matters.
+
+Bigger lesson: **TD-clean and paper-eval are largely uncorrelated.**
+4dabm514, 7m5b0pm6, pnt5yya4 all have TD-clean ≥ e7sadb3v's but paper
+ranges 15 % → 37 % vs e7sadb3v's 44.7 %. Only paper-eval should drive
+ckpt selection.
+
 | Variant | Train-dist clean_reach | Train-dist reach (any) | Paper success | Paper coll | Paper timeout |
 |---|---|---|---|---|---|
 | beta=1 (lptujnh0) | 36 % | 100 % | — | — | — |
-| **beta=10 (e7sadb3v) ⭐** | **67 %** | 95 % | **44.7 %** | 49.0 % | 6.3 % |
+| **beta=10 (e7sadb3v) ⭐** | **51 %** (was 67% — stale) | 91 % | **44.7 %** | 49.0 % | 6.3 % |
 | beta=10 + terminate (8wxdf0mh) | 0 % | 0 % | 0 % | 39.5 % | 60.5 % |
 | beta=50 (1w2zazvt) | 7 % | 52 % | 0 % | 86.8 % | 13.2 % |
 | HIST=2 + beta=10 (891sg5v4) | 0 % | 0 % | 0 % | 0 % | 100 % |
@@ -900,6 +912,20 @@ vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
 - E2E: 18.5 %
 - **Ours (beta=10): 44.7 %** — +14 pp over reported SOTA.
+
+### Methodology lessons logged 2026-05-18
+
+1. **wandb `env/success_clean_reach` is misleading**: it peaks around
+   100-130M steps then decays even though the underlying policy keeps
+   improving on paper-eval. e7sadb3v at 105M: paper 11.2 %; at 500M:
+   paper 44.7 %. Same picture for jcah53tw at 105M (paper 13.7 %).
+2. **TD-clean and paper-success are weakly correlated**: variants with
+   higher TD-clean (e.g. pnt5yya4 = 56 %) can have far worse paper
+   (15.3 %). Optimize for paper-eval, not TD-clean.
+3. **Always eval the final ckpt** unless we have explicit evidence the
+   metric decays (which here it doesn't, despite wandb).
+4. xsob087y kill at 504M was likely a mistake driven by wandb metric;
+   re-running with more focus on paper-eval drives next decisions.
 
 ---
 
@@ -922,6 +948,28 @@ initial random-action distribution. Native MLP encoder is the wrong tool
 for stacked obs — that's a CNN-shaped problem.
 **Followup:** Skip Axis 1.2 (HIST=5 with MLP would be worse). Switch to
 A2.2 (CNN via --slowly) at HIST=1 first.
+
+---
+
+### `jcah53tw` — β=10 + max_steps=400 (half-length episodes) — FAILED
+
+**Trained:** 2026-05-18 ~04:36 UTC, GPU 0, 500M
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/jcah53tw
+**Hypothesis:** Shorter episodes (400 vs 800 ticks = 40 s vs 80 s) ×
+same step budget = 2× more episodes per gradient update → richer signal,
+faster credit assignment.
+**Config delta:** `--env.max-steps 400`.
+**Results:**
+  - wandb peak clean_reach 0.50 at 121M, decayed to 0.36 at 500M.
+  - 105M ckpt paper-eval: **13.7 %** (E 22 / M 13 / H 6).
+  - 500M ckpt paper-eval: **1.7 %** (E 1.5 / M 0.5 / H 3.0).
+**Diagnosis:** Faster wandb convergence but **massive paper-eval
+collapse**. Got WORSE with continued training. Hypothesis: shorter
+episodes amplify PPO over-training because more episodes per gradient
+mean policy drifts farther per update. Or: 800-tick episodes give the
+policy time to learn long-horizon planning that 400 truncates.
+**Conclusion:** max_steps=800 default is necessary for paper-eval. Don't
+shorten episodes.
 
 ---
 
