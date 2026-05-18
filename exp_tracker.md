@@ -907,6 +907,9 @@ ckpt selection.
 | --slowly + CNN HIST=1 (n2sycdre) | n/a (eval blocked) | n/a | 0.3 % wandb | n/a | n/a |
 | beta=10 + arena=20 (7m5b0pm6) | 53 % | 94 % | 36.8 % | 36.7 % | 25.0 % |
 | beta=20 (pnt5yya4) | 56 % | 91 % | 15.3 % | 59 % | 25 % |
+| max_steps=400 (jcah53tw) | n/a | n/a | 1.7 % | 63 % | 35 % |
+| ent_coef=0.001 200M (29pby0gf) | 36 % | 92 % | 17.0 % | 76 % | 7 % |
+| obs speed_max=1.0 (9ypq3hyf) | 57 % | 93 % | 18.7 % | 55 % | 27 % |
 
 vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
@@ -948,6 +951,38 @@ initial random-action distribution. Native MLP encoder is the wrong tool
 for stacked obs — that's a CNN-shaped problem.
 **Followup:** Skip Axis 1.2 (HIST=5 with MLP would be worse). Switch to
 A2.2 (CNN via --slowly) at HIST=1 first.
+
+---
+
+### `9ypq3hyf` — β=10 + obstacle speed_max=1.0 (down from 2.0) — REGRESSED
+
+**Trained:** 2026-05-18 ~06:20 UTC, GPU 0, 500M
+**Hypothesis:** Capping training obstacle speed at robot's forward max
+(1.0) makes physics fairer; training was 0.3-2.0 (obstacles can be 2x
+faster than robot). Should generalize at least as well.
+**Config delta:** `--env.speed-max 1.0`.
+**Wandb final:** clean=0.55, success=0.94, coll=0.77, final_d=1.05 (best
+wandb signals of any non-baseline run).
+**Result:** Paper **18.7%** (E 18.5 / M 18.0 / H 19.5), TD clean 57%.
+**Diagnosis:** Slow training obstacles → policy doesn't learn to handle
+fast obstacles in paper-eval (.world files have varied speeds, some
+exceeding 1.0). Wandb looked promising but the train-vs-paper
+distribution mismatch crushed generalization.
+**Conclusion:** Don't shrink training speed distribution.
+
+---
+
+### `29pby0gf` — β=10 + ent_coef=0.001 (10x lower entropy bonus) — REGRESSED
+
+**Trained:** 2026-05-18 ~05:44 UTC, GPU 1, 200M (capped early)
+**Hypothesis:** Lower entropy bonus → policy commits earlier to good
+trajectories. Might escape PPO over-training mode observed in other
+runs.
+**Config delta:** `--train.ent-coef 0.001` (vs default 0.01).
+**Wandb final:** clean=0.47, success=0.96.
+**Result:** Paper **17.0%** (E 23 / M 16.5 / H 11.5), TD clean 36%.
+**Diagnosis:** Lower entropy → premature commitment → worse generalization.
+Default ent_coef=0.01 is right.
 
 ---
 
