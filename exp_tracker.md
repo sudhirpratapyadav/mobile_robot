@@ -998,6 +998,21 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `2escxbmx` (group: `beta10_a40_obs8to40_speed05to4`) — obs 8-40 + speed 4.0
+
+**Trained:** 2026-05-19 ~01:00 UTC, GPU 1, 500M
+**Config delta vs v6ec2njp:** `--env.speed-max 4.0` (was 3.0). Combines
+v6ec2njp's denser obs (8-40) with 8ke7ss8y's speed=4.0.
+**Wandb final:** clean=0.30, success=0.99.
+**Train-dist:** clean_reach 60 %.
+**Paper-eval:** **61.0 %** (E 68.5 / M 62.5 / H 52.0)
+**Diagnosis:** Stacking density + speed works partially — every dim above
+v6ec2njp and 8ke7ss8y individual configs. But still below mndgrcil's 75%.
+mndgrcil dominated with obs 8-30 + speed 5.0, suggesting **speed is the
+stronger axis** and denser obs may interfere at extreme speed.
+
+---
+
 ### `mndgrcil` (group: `beta10_a40_obs8to30_speed05to5`) — speed_max=5.0 — 🚀 MASSIVE NEW BEST
 
 **Trained:** 2026-05-18 ~23:30 UTC, GPU 0, 500M
