@@ -998,6 +998,21 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `kta8zw5w` (group: `beta10_a40_obs8to40_fast_minigd15`) — v6 + minigd=15
+
+**Trained:** 2026-05-19 ~01:34 UTC, GPU 0, 500M
+**Config delta vs v6ec2njp:** `--env.min-init-goal-dist 15.0` (was 12).
+**Wandb final:** clean=0.31, success=0.97.
+**Train-dist:** clean_reach 59 %.
+**Paper-eval:** **29.8 %** (E 28 / M 34.5 / H 27) — big regression vs
+v6ec2njp's 53.5%.
+**Diagnosis:** Stacking minigd=15 with v6's denser obs hurt. The
+shorter-start-distance lever (which helped 89tvdywf → 0x8w9mi4 marginally)
+doesn't compound with v6's other changes — perhaps the harder start
+distance is incompatible with already-busy obstacle field.
+
+---
+
 ### `2escxbmx` (group: `beta10_a40_obs8to40_speed05to4`) — obs 8-40 + speed 4.0
 
 **Trained:** 2026-05-19 ~01:00 UTC, GPU 1, 500M
