@@ -998,6 +998,22 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `xc4f2nqt` (group: `beta10_a30_obs5to25`) — arena=30 + obs 5-25 — COLLAPSED
+
+**Trained:** 2026-05-18 ~17:24 UTC, GPU 0, 500M
+**Config delta vs e7sadb3v:** `--env.arena-size 30
+--env.num-obstacles-min 5 --env.num-obstacles-max 25`.
+**Wandb final:** clean=0.32, success=0.95, coll=0.91, final_d=1.12.
+**Train-dist:** clean_reach 42 %.
+**Paper-eval:** **2.8 %** (E 3.0 / M 1.0 / H 4.5) — catastrophic.
+**Diagnosis:** Arena/density landscape is brittle. The interpolation
+between e7sadb3v (a24=44.7) and 4ziz0o5p (a40+obs8-30=46.7) is NOT
+smooth — a30+obs5-25 collapses to 2.8 %. The arena/density combo
+appears to have isolated wins (a24 vanilla, a40+8-30) and lots of
+broken interpolants.
+
+---
+
 ### `h8p5n9sr` (group: `beta10_a40_obs8to30_all6`) — COMBO: a40 + obs 8-30 + all-6-motion
 
 **Trained:** 2026-05-18 ~15:36 UTC, GPU 1, 500M
