@@ -25,7 +25,7 @@
 #include "../shared/world_loader.h"
 #include "../shared/costmap.h"
 
-#define MAX_OBSTACLES 30
+#define MAX_OBSTACLES 64   /* match dyna_train.h */
 // Obs format MUST match dyna_train (see dyna_train/dyna_train.h). Toggle the
 // same compile-time switches when changing arches. When OBS_MODE_COSTMAP=1
 // and HISTORY_LEN=1 (defaults), obs is

@@ -44,7 +44,11 @@
 #include "../shared/motion.h"
 #include "../shared/costmap.h"
 
-#define MAX_OBSTACLES 30
+#define MAX_OBSTACLES 64   /* bumped 30→64 (2026-05-18) to enable proper
+                              density-matching at arena=40 and above.
+                              Does NOT change OBS_DIM (policy sees costmap+
+                              extras only); only env-internal storage and
+                              the trajectory dump Row size. */
 // Observation mode — pick at compile time. To switch, change this define and
 // rebuild (bash build.sh dyna_train + bash build.sh dyna_train --fast).
 //   OBS_MODE_COSTMAP = 0 → 720-d LiDAR + (v, w, goal_dx_body, goal_dy_body)
