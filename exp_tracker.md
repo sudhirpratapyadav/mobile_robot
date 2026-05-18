@@ -998,6 +998,40 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `8pfpn2ef` (group: `beta10_arena22`) — β=10 + arena=22 (midpoint)
+
+**Trained:** 2026-05-18 ~13:31 UTC, GPU 1, 500M
+**Config delta:** `--env.arena-size 22.0`. Tests if arena slightly larger
+than eval (20) helps.
+**Wandb final:** clean=0.30, success=0.96.
+**Train-dist (100 ep, arena=22):** clean_reach **58 %**, reached_dirty 35 %,
+collision 5 %, timeout 2 % — **+7 pp TD-clean over e7sadb3v 51 %**.
+**Paper-eval:** **27.2 %** (E 31.5 / M 30 / H 20). −17.5 pp vs 44.7.
+**Diagnosis:** Sits between arena=20 (paper 36.8) and arena=24 (44.7) on
+paper, but better than both on TD-clean. The 22→24 jump in paper-eval
+is larger than expected — 2 m of training-arena difference matters.
+**Under purpose.md lens:** mild TD-clean win; small step on the
+broader-distribution axis.
+
+---
+
+### `88gl5zqc` (group: `beta10_minigd8`) — β=10 + min_init_goal_dist=8 (easier curriculum)
+
+**Trained:** 2026-05-18 ~13:05 UTC, GPU 0, 500M
+**Config delta:** `--env.min-init-goal-dist 8.0` (vs 12.0). Shorter
+required start-goal distance → easier task on average.
+**Wandb final:** clean=0.40, success=0.97, coll=0.90, final_d=1.10
+(≈ identical to e7sadb3v).
+**Train-dist (100 ep):** clean_reach 54 %, reached_dirty 40 %, +marginal.
+**Paper-eval:** **16.5 %** (E 17.5 / M 20.0 / H 12.0) — big drop from 44.7.
+**Diagnosis:** Easier training → policy doesn't learn long-range
+navigation. Paper requires 21 m start→goal; training avg now much
+shorter. Robot learned local reach well, lost path-planning horizon.
+**Under purpose.md lens:** marginal TD-clean lift but qualitatively
+worse. Don't make training easier.
+
+---
+
 ### `p3yf7hiq` (group: `beta10_obs5to30`) — β=10 + obstacles 5-30 (denser) — FLATTER DIFFICULTY CURVE
 
 **Trained:** 2026-05-18 ~11:54 UTC, GPU 1, 500M
