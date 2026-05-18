@@ -998,7 +998,28 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
-### `8ke7ss8y` (group: `beta10_a40_obs8to30_speed05to4`) — speed 0.5-4.0 — 🆕 NEW BEST
+### `v6ec2njp` (group: `beta10_a40_obs8to40_fast`) — obs 8-40 + speed 0.5-3.0 — 🆕🆕 NEW BEST
+
+**Trained:** 2026-05-18 ~22:31 UTC, GPU 0, 500M
+**Config delta vs 89tvdywf:** `--env.num-obstacles-max 40` (was 30). Denser
+obstacles on top of fast-obs recipe.
+**Wandb final:** clean=0.30, success=0.98, coll=0.93, final_d=1.08.
+**Train-dist:** clean_reach 61 %, reached_dirty 39 %.
+**Paper-eval (600 trials):** **53.5 %** — NEW HEADLINE
+  - **Easy: 64.0 %** (+8.5 pp vs e7sadb3v's 55.5, BEST EVER)
+  - **Medium: 55.5 %** (+11 pp vs e7sadb3v, tied with 4ziz0o5p)
+  - Hard: 41.0 % (+7 pp vs e7sadb3v, behind 8ke7ss8y's 50.5)
+**Diagnosis:** Denser obstacles (8-40) + fast obstacles (0.5-3.0)
+compound at arena=40. Bigger boost on easy/medium than the speed-only
+push (8ke7ss8y traded easy/medium for hard at speed=4.0). v6ec2njp
+is the broadest gain: every dim except hard hits a new high.
+**Vs LfH-CP SOTA:** 30.83 %. Ours **+22.7 pp**.
+**Followup:** Try v6ec2njp + speed_max=4.0 (combine all 3 axes) to
+see if it stacks further.
+
+---
+
+### `8ke7ss8y` (group: `beta10_a40_obs8to30_speed05to4`) — speed 0.5-4.0 — PREVIOUS BEST
 
 **Trained:** 2026-05-18 ~22:15 UTC, GPU 1, 500M
 **Config delta vs 89tvdywf:** `--env.speed-max 4.0` (was 3.0). Even faster
