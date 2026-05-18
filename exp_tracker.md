@@ -881,6 +881,15 @@ extending further.
 
 ---
 
+## Strategic pivot (2026-05-18)
+
+See **docs/purpose.md**: optimisation target is now train-distribution
+`clean_reach`. Paper-eval is a byproduct, not the lever. Under this
+lens, **`40qb3qf0` (arena=40) is the current TD-clean champion at 80 %**
+(e7sadb3v: 51 %).
+
+---
+
 ## Headline summary (2026-05-17 / 18)
 
 **CORRECTION (2026-05-18)**: The e7sadb3v "67 % TD clean" number cited
@@ -986,6 +995,41 @@ balance.
 **Conclusion:** Could potentially **mix** policies: σ_o=0.5-trained
 for easy, σ_o=0.8 for hard. Or sweep σ_o further to find ensemble peak.
 Single-σ_o won't beat e7sadb3v overall.
+
+---
+
+### `40qb3qf0` — β=10 + arena=40 (walls far away) — TD-CLEAN CHAMPION (paper down)
+
+**Trained:** 2026-05-18 ~11:54 UTC, GPU 0, 500M
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/40qb3qf0
+**Config delta:** `--env.arena-size 40.0`. Everything else identical
+to e7sadb3v.
+**Wandb final env metrics:**
+  - success (reached at all): **98.9 %**
+  - success_clean_reach: **67.9 %** ⭐ (vs e7sadb3v 0.39)
+  - success_strict: 33.0 %
+  - collision: 66.6 %  n_collision_events: 1.47/ep
+  - closest_obstacle: 0.84 m
+  - final_dist_to_goal: 0.84 m  min_dist_to_goal: 0.05 m
+  - dist_from_goal_at_first_collision: 4.37 m
+  - steps_at_goal (dwell): 72  max_steps_between_collisions: 605
+  - episode_return: 578.7  timeout: 1.1 %
+**Train-dist (100 ep, arena=40):** clean_reach **80 %**, reached_dirty
+19 %, timeout 1 %. **BEST TD-clean of any run** (+29 pp over e7sadb3v).
+**Paper-eval (600 trials, arena=20 paper geom):** **26 %**
+(E 29 / M 27.5 / H 21.5). Worse than e7sadb3v's 44.7 %.
+**Under old paper-driven lens:** regression.
+**Under new TD-clean lens (docs/purpose.md):** champion. The training
+metric is the lever; paper-eval is a byproduct.
+**Why it wins on TD-clean:** larger arena gives more space to plan
+around obstacles; walls rarely encountered (vs e7sadb3v where the
+boundary clamps the robot's path).
+**Why it loses on paper-eval (informational):** policy trained for 40m
+open space doesn't fit the paper's 20m 3-walled room — wrong spatial
+prior. But this is fixable by making the 40m training distribution
+harder/broader rather than shrinking the arena.
+**Followup:** This is the new baseline. Make IT harder: more obstacles,
+broader motion families, harder goal box, etc., while keeping arena=40.
 
 ---
 
