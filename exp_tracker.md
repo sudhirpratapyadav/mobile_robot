@@ -911,6 +911,9 @@ ckpt selection.
 | ent_coef=0.001 200M (29pby0gf) | 36 % | 92 % | 17.0 % | 76 % | 7 % |
 | obs speed_max=1.0 (9ypq3hyf) | 57 % | 93 % | 18.7 % | 55 % | 27 % |
 | σ_o=0.5 (npbclfh2) | 49 % | 98 % | 32.7 % | 67 % | 1 % |
+| σ_o=0.65 (antm4p98) | 47 % | 97 % | 30.5 % | 56 % | 13 % |
+| σ_o=1.5 (1pxjva79) | 12 % | 59 % | 0.0 % | 57 % | 43 % |
+| σ_o=1.0 (7s24f949) | 33 % | 87 % | 1.0 % | 53 % | 46 % |
 
 vs DynaBARN paper reported numbers (see `docs/dyna_barn.md`):
 - LfH-CP (SOTA): 30.83 %
