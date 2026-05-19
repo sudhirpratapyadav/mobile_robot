@@ -1656,3 +1656,39 @@ longer training. Not worth pursuing without an LR retune.
 **Followup:** Skip h256. If touching architecture, prefer changing depth
 (more layers) or RNN beyond MinGRU rather than just widening the MLP.
 
+---
+
+### `3yu2eo2v` (group: `beta10_a40_obs8to30_speed05to55`) — mndgrcil + speed_max=5.5 — second-best
+
+**Trained:** 2026-05-19, GPU 1, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/3yu2eo2v
+**Hypothesis:** Fine-sweep around the speed=5 peak: probe 5.5 to see how
+sharp the cliff toward speed=6 (28.7 %) actually is.
+**Config delta:** `--env.speed-max 5.5` (everything else = mndgrcil king).
+**Result (wandb final):** clean=0.234, success=0.999, coll=0.974.
+**Result (train-dist, 100 ep):** verdicts = **48 clean_reach / 51
+reached_dirty / 1 collision.** Solid: 99 % reach, ~half clean.
+**Result (paper-eval, 600 trials):** **63.2 %** overall
+(379 success / 219 collision / 2 timeout).
+Easy **73.0 %**, Medium **67.0 %**, Hard **49.5 %**.
+**Diagnosis:** Speed=5 is a *narrow* peak. Even +0.5 m/s loses 11.8 pp
+paper (E −12, M −11.5, H −12). The speed=5→6 transition cliff isn't
+sudden; performance is monotone-decreasing past 5.0 with a steeper slope
+between 5.5 and 6.
+**Conclusion:** Speed=5 is the king of the speed axis. Don't push above.
+**Followup:** Probe speed=4.5 (in-flight, `kx9mk22s`) to map the symmetric
+decay on the slower side and confirm 5.0 is the global peak in [4, 5.5].
+Updates speed-sweep map below.
+
+### Updated speed sweep (post-3yu2eo2v)
+
+| speed_max | run_id    | Paper | E    | M    | H    |
+|-----------|-----------|------:|-----:|-----:|-----:|
+| 2.0       | e7sadb3v  | 44.7  | 55.5 | 44.5 | 34.0 |
+| 3.0       | 89tvdywf  | 47.0  | 48.5 | 49.5 | 43.0 |
+| 4.0       | 8ke7ss8y  | 47.8  | 48.5 | 44.5 | 50.5 |
+| **5.0** ⭐ | **mndgrcil** | **75.0** | **85.0** | **78.5** | **61.5** |
+| 5.5       | 3yu2eo2v  | 63.2  | 73.0 | 67.0 | 49.5 |
+| 6.0       | g3kvfo60  | 28.7  | 35.0 | 27.0 | 24.0 |
+| 7.0       | xsob087y  | 44.3  | 62.0 | 37.0 | 34.0 |
+
