@@ -998,6 +998,21 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `6odijl5a` (group: `beta10_a40_obs8to40_speed05to5`) — mndgrcil + obs 8-40 — TOTAL COLLAPSE
+
+**Trained:** 2026-05-19 ~06:09 UTC, GPU 0, 500M
+**Config delta vs mndgrcil:** `--env.num-obstacles-max 40` (was 30).
+**Wandb final:** clean=0.19, success=0.98, coll=0.98, final_d=0.85.
+**Train-dist:** clean_reach 37%, reached_dirty 55%.
+**Paper-eval:** **0.17 %** (1/600 success) — TOTAL COLLAPSE.
+**Diagnosis:** Stacking denser obs onto mndgrcil's speed=5 recipe
+destroys paper-eval. mndgrcil's (a40 + obs 8-30 + speed 5) is a very
+specific magic combination, not a smooth surface. Even small changes
+(obs cap 30→40) push it off the cliff. Same brittleness as σ_o and
+β sweeps.
+
+---
+
 ### `ubdwb7xu` (group: `beta10_a40_obs8to30_speed05to7`) — speed=7 — MID
 
 **Trained:** 2026-05-19 ~03:54 UTC, GPU 0, 500M
