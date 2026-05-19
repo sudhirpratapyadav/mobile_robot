@@ -66,7 +66,8 @@ for idx in $(seq 0 59); do
                 --episodes "$N_TRIALS" \
                 --max-steps "$MAX_STEPS" \
                 --world-seed-base "$seed" \
-                --seed "$seed" >/dev/null
+                --seed "$seed" \
+                ${EXTRA_EVAL_ARGS:-} >/dev/null
     python "$HOST_ROOT/tools/bake_traj_parquet.py" "$bin" "$parq" >/dev/null
     rm -f "$bin"
     printf "  world_%s done\n" "$pad"

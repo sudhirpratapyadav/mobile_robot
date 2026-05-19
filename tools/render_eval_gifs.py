@@ -34,7 +34,9 @@ import numpy as np
 import polars as pl
 
 
-ARENA_HALF = 10.0
+ARENA_HALF = 14.0   # was 10.0 (eval arena half-extent); bumped so the
+                    # robot start at x=12 (and any 90°-rotated y=12) is
+                    # comfortably inside the rendered viewport.
 SIZE = 480
 OBS_R_M = 0.5
 ROBOT_R_M = 0.30

@@ -1879,3 +1879,31 @@ performance. Same direction as the original σ_o sweep at speed=2
 **Followup:** σ_o axis is now fully mapped at both speed=2 and speed=5
 — same optimum (0.8) at both anchors.
 
+---
+
+### `mndgrcil` rotated paper-eval (rot=90, open wall on +y)
+
+**Evaluated:** 2026-05-19 (same 500 M ckpt as the king)
+**Code change:** added `--rotation {0,90,180,270}` flag to dyna_eval
+(`dyna_eval.h` + `dyna_eval.c`) that rotates start/goal/walls CCW
+around (0,0). Obstacles unchanged. ARENA_HALF in renderer bumped
+10 → 14 so the start position (x=12 or rotated y=12) is visible.
+**Result (paper-eval, 600 trials, rotation=90°):** **55.0 %** overall.
+Easy 75.0 % / Medium 62.0 % / Hard 28.0 %. (Zero timeouts.)
+
+| | rot=0 (king) | rot=90 | Δ |
+|---|---:|---:|---:|
+| Overall | 75.0 | **55.0** | −20.0 |
+| Easy    | 85.0 | 75.0 | −10.0 |
+| Medium  | 78.5 | 62.0 | −16.5 |
+| Hard    | 61.5 | 28.0 | **−33.5** |
+
+**Diagnosis:** Policy generalizes partially to rotation but isn't
+rotation-invariant. 20 pp loss overall is concentrated on hard worlds
+(−33.5 pp). Suggests the policy learned heading biases tied to the
++x→−x training corridor. Still way above LfH-CP SOTA (30.83 %) even
+under rotation.
+**Artifacts:** `runs/train/dyna_train/mndgrcil/eval_paper_rot90/0000000499908608/`
+**Followup:** If pursuing rotation-invariance, add training-time random
+rotation to the env so the policy sees all 4 orientations during PPO.
+

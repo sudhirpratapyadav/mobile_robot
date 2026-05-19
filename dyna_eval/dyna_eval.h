@@ -144,6 +144,8 @@ typedef struct {
     float goal_radius;            // (kept for back-compat; success uses L∞ box now)
     // Corrected-eval-geometry knobs (default = real-paper setup):
     int   open_front;             // 1 = no wall on +x side (real eval); 0 = closed box
+    int   rotation;               // 0/90/180/270 CCW degrees applied to start/goal/walls.
+                                  // Rotates the room frame around (0,0); obstacles unchanged.
     float v_max_clip;             // clamp policy v output to ±this. 0 → uncapped.
     float goal_box_half;          // L∞ "box" half-extent for success (paper: 0.3)
     // Acceleration limits — paper base_local_planner_params.yaml.
@@ -183,11 +185,20 @@ static inline bool obstacle_collision(const DynaEval* env) {
 
 static inline bool wall_collision(const DynaEval* env) {
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    // y-side walls + back wall (−x). +x wall absent if open_front.
-    if (env->robot.y >  half) return true;
-    if (env->robot.y < -half) return true;
-    if (env->robot.x < -half) return true;
-    if (!env->open_front && env->robot.x > half) return true;
+    // The room is 3-walled with one open side. At rotation=0, +x is open.
+    // After CCW rotation R°, the open side is at angle R° (so the wall we
+    // skip is at angle R°, the three walls we keep are the other sides).
+    float rx = env->robot.x, ry = env->robot.y;
+    int R = env->rotation;
+    // Map robot pos back to the rotation=0 frame to reuse the original
+    // 3-walls-on-{+y, −y, −x}-and-optional-+x logic.
+    if      (R ==  90) { float t=rx; rx= ry; ry=-t; }   // inverse of +90 = −90
+    else if (R == 180) { rx=-rx; ry=-ry; }
+    else if (R == 270) { float t=rx; rx=-ry; ry= t; }   // inverse of +270 = +90
+    if (ry >  half) return true;
+    if (ry < -half) return true;
+    if (rx < -half) return true;
+    if (!env->open_front && rx > half) return true;
     return false;
 }
 
@@ -289,9 +300,21 @@ void c_reset(DynaEval* env) {
     env->tick = 0;
     env->sim_time = 0.0f;
     env->episode_return = 0.0f;
-    env->robot.x = EVAL_START_X;
-    env->robot.y = EVAL_START_Y;
-    env->robot.theta = EVAL_START_TH;   // facing −x, into the room's +x opening
+    {
+        // Apply CCW rotation R° to start position & heading.
+        // (x', y') = rot_R(x, y); θ' = θ + R.
+        float sx = EVAL_START_X, sy = EVAL_START_Y, sth = EVAL_START_TH;
+        float gx = EVAL_GOAL_X,  gy = EVAL_GOAL_Y;
+        int R = env->rotation;
+        if      (R ==  90) { float t=sx; sx=-sy; sy=t; t=gx; gx=-gy; gy=t; sth += (float)M_PI*0.5f; }
+        else if (R == 180) { sx=-sx; sy=-sy; gx=-gx; gy=-gy; sth += (float)M_PI; }
+        else if (R == 270) { float t=sx; sx=sy; sy=-t; t=gx; gx=gy; gy=-t; sth += (float)M_PI*1.5f; }
+        env->robot.x = sx;
+        env->robot.y = sy;
+        env->robot.theta = sth;
+        env->goal_x = gx;
+        env->goal_y = gy;
+    }
     env->robot.v = 0.0f;
     env->robot.w = 0.0f;
 #if OBS_MODE_COSTMAP && HISTORY_LEN > 1
@@ -300,8 +323,6 @@ void c_reset(DynaEval* env) {
                (HISTORY_LEN - 1) * COSTMAP_SIZE * sizeof(float));
     }
 #endif
-    env->goal_x = EVAL_GOAL_X;
-    env->goal_y = EVAL_GOAL_Y;
 
     if (env->world_file_set) {
         int n = world_loader_load(env->world_file_path, env->traj, MAX_OBSTACLES);
@@ -377,10 +398,24 @@ void c_step(DynaEval* env) {
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    // Clamp y (always walled). Clamp −x (back wall). +x: only if closed box.
-    env->robot.y = clampf(env->robot.y, -half, half);
-    if (env->robot.x < -half) env->robot.x = -half;
-    if (!env->open_front && env->robot.x > half) env->robot.x = half;
+    // Clamp robot to the (possibly rotated) 3-walled room. Work in the
+    // rotation=0 frame: clamp ±y, clamp −x (back wall), optionally +x.
+    {
+        float rx = env->robot.x, ry = env->robot.y;
+        int R = env->rotation;
+        if      (R ==  90) { float t=rx; rx= ry; ry=-t; }
+        else if (R == 180) { rx=-rx; ry=-ry; }
+        else if (R == 270) { float t=rx; rx=-ry; ry= t; }
+        ry = clampf(ry, -half, half);
+        if (rx < -half) rx = -half;
+        if (!env->open_front && rx > half) rx = half;
+        // Rotate back to world frame.
+        if      (R ==  90) { float t=rx; rx=-ry; ry= t; }
+        else if (R == 180) { rx=-rx; ry=-ry; }
+        else if (R == 270) { float t=rx; rx= ry; ry=-t; }
+        env->robot.x = rx;
+        env->robot.y = ry;
+    }
 
     update_obstacles(env);
 

@@ -21,7 +21,8 @@
 static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
                          float dt, int difficulty, int world_seed_base,
                          float goal_radius, const char* world_file,
-                         int open_front, float v_max_clip, float goal_box_half,
+                         int open_front, int rotation,
+                         float v_max_clip, float goal_box_half,
                          float a_max, float alpha_max) {
     DynaEval env = {
         .arena_size = arena_size,
@@ -36,6 +37,7 @@ static DynaEval make_env(unsigned int seed, float arena_size, int max_steps,
         .collision_penalty = 10.0f,
         .goal_radius = goal_radius,
         .open_front = open_front,
+        .rotation = rotation,
         .v_max_clip = v_max_clip,
         .goal_box_half = goal_box_half,
         .a_max = a_max,
@@ -72,6 +74,7 @@ int main(int argc, char** argv) {
     float goal_radius = 0.5f;
     // Default to the corrected paper-eval geometry; CLI can override.
     int   open_front    = 1;
+    int   rotation      = 0;                    // 0/90/180/270 CCW rotation of room frame.
     float v_max_clip    = EVAL_VMAX_PAPER;      // 2.0 m/s — matches train
     float goal_box_half = 0.3f;                 // paper arrival_gaol
     float a_max         = 10.0f;                // paper acc_lim_x
@@ -96,6 +99,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--dt") && i+1 < argc)               dt = atof(argv[++i]);
         else if (!strcmp(argv[i], "--goal-radius") && i+1 < argc)      goal_radius = atof(argv[++i]);
         else if (!strcmp(argv[i], "--open-front") && i+1 < argc)       open_front = atoi(argv[++i]);
+        else if (!strcmp(argv[i], "--rotation") && i+1 < argc)         rotation = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--v-max-clip") && i+1 < argc)       v_max_clip = atof(argv[++i]);
         else if (!strcmp(argv[i], "--goal-box-half") && i+1 < argc)    goal_box_half = atof(argv[++i]);
         else if (!strcmp(argv[i], "--a-max") && i+1 < argc)            a_max = atof(argv[++i]);
@@ -110,7 +114,8 @@ int main(int argc, char** argv) {
 
         DynaEval env = make_env(seed, arena_size, max_steps, dt,
                                 difficulty, world_seed_base, goal_radius,
-                                world_file, open_front, v_max_clip, goal_box_half,
+                                world_file, open_front, rotation,
+                                v_max_clip, goal_box_half,
                                 a_max, alpha_max);
         allocate(&env);
 
@@ -184,7 +189,8 @@ int main(int argc, char** argv) {
     srand(seed);
     DynaEval env = make_env(seed, arena_size, max_steps, dt,
                             difficulty, world_seed_base, goal_radius,
-                            world_file, open_front, v_max_clip, goal_box_half,
+                            world_file, open_front, rotation,
+                            v_max_clip, goal_box_half,
                             a_max, alpha_max);
     allocate(&env);
     c_reset(&env);
