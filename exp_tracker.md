@@ -998,6 +998,20 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `w1mzz7c1` (group: `beta10_a40_obs8to30_speed05to6`) — speed=6 — REGRESSED
+
+**Trained:** 2026-05-19 ~04:36 UTC, GPU 1, 500M
+**Config delta vs mndgrcil:** `--env.speed-max 6.0` (was 5.0).
+**Wandb final:** clean=0.20, success=1.00, coll=0.98, final_d=0.86.
+**Train-dist:** clean_reach 26 %, reached_dirty 69 % — high dirty %.
+**Paper-eval:** **28.7 %** (E 35 / M 27 / H 24) — big drop from mndgrcil's 75%.
+**Diagnosis:** Speed=5 was a knife-edge optimum, not the start of a
+smooth scaling curve. Speed=6 collapses paper. Same pattern as β
+(peak at 10) and σ_o (peak at 0.8). The reward landscape has narrow
+peaks at specific parameter values.
+
+---
+
 ### `kta8zw5w` (group: `beta10_a40_obs8to40_fast_minigd15`) — v6 + minigd=15
 
 **Trained:** 2026-05-19 ~01:34 UTC, GPU 0, 500M
