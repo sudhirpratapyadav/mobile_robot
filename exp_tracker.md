@@ -1776,3 +1776,36 @@ arena=40 → 45 step actually loses *more* paper than 40 → 24 (e7sadb3v).
 **Followup:** Probe a35 (in-flight) to map the arena curve on the
 smaller side. Then arena axis is done.
 
+---
+
+### `9qoqphry` (group: `beta15_a40_obs8to30_speed05to5`) — mndgrcil + β=15 — REGRESSED MILDLY
+
+**Trained:** 2026-05-19, GPU 0, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/9qoqphry
+**Hypothesis:** mndgrcil holds β at 10. With faster obstacles (speed=5),
+maybe stronger repulsion β=15 helps the policy give wider berth.
+**Config delta:** `--env.beta 15.0` (else = mndgrcil king).
+**Result (wandb final):** clean=0.224, success=0.994, coll=0.966.
+**Result (train-dist, 100 ep):** verdicts = **54 clean_reach / 46
+reached_dirty / 0 timeout / 0 collision.** Zero collisions, zero
+timeouts — perfectly safe but conservative.
+**Result (paper-eval, 600 trials):** **59.8 %** overall
+(359 success / 241 collision / 0 timeout).
+Easy **74.0 %** (−11 pp vs king), Medium **69.0 %** (−9.5 pp),
+**Hard 36.5 %** (−25 pp).
+**Diagnosis:** Stronger repulsion β=15 makes the policy **safer in
+training but worse in hard eval worlds**. Hard worlds have higher
+obstacle density → stronger β creates more "freezing" or detour
+behaviour the policy can't unstick from. Easy/medium losses are mild
+(~10 pp). The +5 in β pushes the dense reward landscape away from the
+careful tuning point (β=10).
+TD verdicts (0 coll, 0 to) confirm the policy is *fitting* its training
+distribution — but the fit is too conservative for the paper's harder
+worlds.
+**Conclusion:** β=10 stays the king. Don't bump up β.
+**Followup:** Possible to try β=5 or β=7 (lower repulsion) but
+expectation is that it just makes the policy more aggressive (and the
+TD-clean curves through PPO-tested values 5, 10, 20 already showed
+β=10 ≈ 67 % beat β=20 ≈ 56 % beat β=5 ≈ unknown — but earlier
+ablations rolled out β=10 as the peak). Skip.
+
