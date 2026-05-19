@@ -1074,16 +1074,18 @@ beyond any obstacle speed in paper-eval, but the **margin** the policy
 learned translates directly to better paper performance. Training on
 harder physics → robust policy.
 
-**Speed sweep is now monotonic AND continues climbing:**
+**Speed sweep is non-monotonic — speed=5 is a knife-edge peak:**
   speed_max  paper  E    M    H
   2.0        44.7%  55.5 44.5 34.0
   3.0        47.0%  48.5 49.5 43.0
   4.0        47.8%  48.5 44.5 50.5
   **5.0**    **75.0%** 85.0 78.5 61.5
+  6.0        28.7%  35.0 27.0 24.0
+  7.0        44.3%  62.0 37.0 34.0
 
-**This is the strongest single-axis discovery of the entire run.**
-Need to validate the +27pp jump from 4.0→5.0 is not measurement
-artifact. Followup: try speed_max=6.0, 7.0 to see if it keeps climbing.
+**Verified stable**: mndgrcil at 262M ckpt = 65.5% paper (E 70.5/M 72/H 54).
+500M = 75.0%. **Monotonic improvement** during training, not a
+late-training fluke. The policy genuinely converges to this level.
 
 ---
 
