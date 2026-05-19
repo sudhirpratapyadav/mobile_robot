@@ -1856,3 +1856,26 @@ variety) at the locked a40+speed=5 anchor.
 | **40** ⭐ | **mndgrcil** | **75.0** | — |
 | 45    | 7itjyj5u  | 22.7  | 56       |
 
+---
+
+### `pp1vc35o` (group: `beta10_a40_obs8to30_speed05to5_sigma1`) — mndgrcil + σ_o=1.0 — REGRESSED
+
+**Trained:** 2026-05-19, GPU 0, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/pp1vc35o
+**Hypothesis:** Original σ_o sweep was at speed=2 baseline. At speed=5
+fast obstacles, maybe wider repulsion field σ_o=1.0 (vs default 0.8)
+gives the policy more advance warning to dodge.
+**Config delta:** `--env.sigma-o 1.0` (else = mndgrcil king).
+**Result (wandb final):** clean=0.181, success=0.961, coll=0.965.
+**Result (train-dist, 100 ep):** 50 clean / 45 dirty / 3 coll / 2 to.
+**Result (paper-eval, 600 trials):** **31.0 %** overall
+(186 success / 321 collision / 93 timeout).
+Easy **34.0 %**, Medium **33.5 %**, Hard **25.5 %**.
+**Diagnosis:** σ_o=1.0 regresses 44 pp vs king. Wider repulsion field
+appears to interfere with the gradient signal that produces mndgrcil's
+performance. Same direction as the original σ_o sweep at speed=2
+(σ_o=1.0 was worse than σ_o=0.8 there too).
+**Conclusion:** σ_o=0.8 is the king. Don't sweep σ_o further at speed=5.
+**Followup:** σ_o axis is now fully mapped at both speed=2 and speed=5
+— same optimum (0.8) at both anchors.
+
