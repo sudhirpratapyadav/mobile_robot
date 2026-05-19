@@ -1544,3 +1544,115 @@ The dense Gaussian-attraction + dense Gaussian-repulsion combo is the
 right shape; piling on spikes breaks the gradient.
 **Followup:** Don't sweep individual values of success_bonus / collision_pen
 on top of β=10; try fundamentally different lever (architecture instead).
+
+---
+
+## Post-truncation appendix (2026-05-18 / 19) — compact rebuild
+
+The original per-run write-ups for the runs below were lost when this
+file was truncated. Authoritative per-run context lives in git commit
+messages on `exp_tracker.md` / `logger.md`; below is a compact tabular
+re-summary so future-me can still navigate.
+
+### Speed sweep (the breakthrough axis)
+
+All entries: `--env.beta 10 --env.arena-size 40 --env.num-obstacles-min 8
+--env.num-obstacles-max 30 --env.speed-min 0.5 --env.speed-max <X>`,
+500 M steps.
+
+| speed_max | run_id    | group                                   | Paper | E    | M    | H    | Notes |
+|-----------|-----------|-----------------------------------------|-------|------|------|------|---|
+| 2.0       | e7sadb3v  | (baseline)                              | 44.7  | 55.5 | 44.5 | 34.0 | original best |
+| 3.0       | 89tvdywf  | beta10_a40_obs8to30_speed05to3          | 47.0  | 48.5 | 49.5 | 43.0 | |
+| 4.0       | 8ke7ss8y  | beta10_a40_obs8to30_speed05to4          | 47.8  | 48.5 | 44.5 | 50.5 | first hard>easy |
+| **5.0** ⭐ | **mndgrcil** | **beta10_a40_obs8to30**              | **75.0** | **85.0** | **78.5** | **61.5** | **king** |
+| 6.0       | g3kvfo60  | beta10_a40_obs8to30_speed05to6          | 28.7  | 35.0 | 27.0 | 24.0 | speed cliff |
+| 7.0       | xsob087y  | beta10_a40_obs8to30_speed05to7          | 44.3  | 62.0 | 37.0 | 34.0 | rebound, not at peak |
+
+Speed=5 is a **sharp peak**, not a plateau. Going both up (6) and down
+(4) loses ~30 pp.
+
+**In-flight on 2026-05-19:**
+- `kx9mk22s` speed_max=4.5, group `beta10_a40_obs8to30_speed05to45`, GPU 0
+- `3yu2eo2v` speed_max=5.5, group `beta10_a40_obs8to30_speed05to55`, GPU 1
+
+### Other 2026-05-18/19 sweeps (off-axis, all worse than mndgrcil)
+
+| run_id   | group                                | delta from mndgrcil       | Paper | Verdict |
+|----------|--------------------------------------|---------------------------|-------|---|
+| 4ziz0o5p | beta10_a40_obs8to30_speed05to3_fast  | speed→3 base for combos   | 53.5  | better than e7sadb3v |
+| 2escxbmx | beta10_a40_obs8to40_speed05to4       | obs→40 max + speed=4      | 61.0  | not at peak speed |
+| kta8zw5w | beta10_a40_obs8to40_speed3_minigd15  | + minigd=15 on denser     | 29.8  | minigd doesn't compound |
+| 0x8w9mi4 | beta10_minigd15                      | minigd→15 alone           | 48.2  | E +12.5pp / H −7pp tradeoff |
+| (1 B)    | beta10_a40_obs8to30 + 1 B steps      | mndgrcil 500M→1B          | 47.0  | PPO over-training, lost 28 pp |
+| (a40+obs8-40+speed5) | beta10_a40_obs8to40_speed05to5 | denser at peak speed | 0.17 | precise sweet spot |
+| zl1d60zk | beta10_a60_obs32to64_minigd20        | bigger arena              | 9.0   | arena=60 cliff |
+| (others) | density-match a40+obs16-48           | density-matched           | 10.8  | 4ziz0o5p was NOT density-matched |
+| (others) | a30+obs5-25                          | mid-density               | 2.8   | brittle |
+
+### Architecture sweep (all collapsed)
+
+| run_id   | group                              | delta             | Paper | TD verdicts                  |
+|----------|------------------------------------|-------------------|-------|------------------------------|
+| jm45ebyr | beta10_h256                        | h256 + e7sadb3v   | 0.0   | 94 coll / 6 to               |
+| `o6h96en8` | `beta10_a40_obs8to30_h256`       | h256 + mndgrcil   | **0.0** | **95 coll / 5 to / 0 reach** |
+
+→ `hidden_size=256` is a **dead axis** at both speed baselines. Adding
+capacity without retuning LR / horizon → policy never converges. Not
+worth re-running.
+
+### Methodology notes (re-stated here for durability)
+
+- wandb `env/success_clean_reach` is **NOT** predictive of paper-eval.
+  mndgrcil's wandb clean was ~0.25 while paper landed at 75 %. Don't
+  pick ckpts on wandb metric.
+- Native PufferLib **ignores `--train.seed`**. MD5-confirmed e7sadb3v
+  (seed=42) and rwcyw8ef (seed=7) checkpoints are bit-identical.
+  Multi-seed sweeps on native backend are no-ops.
+- PPO over-trains past ~500 M on this env. mndgrcil at 500 M = 75 %,
+  at 1 B = 47 %. 500 M is part of the recipe.
+- Density-match argument is real but second-order. arena=40 + obs=8-30
+  is *not* density-matched to arena=24 + obs=3-20 (density ratio 0.36×),
+  yet beats it. The win comes from the open arena, not density parity.
+
+### Current king's recipe (2026-05-19)
+
+```
+--env.beta 10.0
+--env.arena-size 40.0
+--env.num-obstacles-min 8 --env.num-obstacles-max 30
+--env.speed-min 0.5 --env.speed-max 5.0
+--train.total-timesteps 500000000
+```
+
+`run_id mndgrcil` (group `beta10_a40_obs8to30`). Paper-eval **75.0 %**
+(E 85.0 / M 78.5 / H 61.5), +44 pp over LfH-CP SOTA (30.83 %).
+
+---
+
+### `o6h96en8` (group: `beta10_a40_obs8to30_h256`) — mndgrcil + hidden_size=256 — FAILED
+
+**Trained:** 2026-05-19, GPU 0, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/o6h96en8
+**Hypothesis:** mndgrcil's MLP-128 may be capacity-limited at the
+broader (a40 + speed=5) distribution. Doubling hidden size to 256
+should let the policy fit the larger landscape.
+**Config delta:** `--env.beta 10 --env.arena-size 40 --env.num-obstacles-min 8
+--env.num-obstacles-max 30 --env.speed-min 0.5 --env.speed-max 5.0
+--policy.hidden-size 256` (from mndgrcil recipe).
+**Result (wandb final):** clean=0.18, success=0.99, coll=0.97.
+**Result (train-dist, 100 ep):** verdicts = **95 collision / 5 timeout /
+0 reached / 0 clean_reach.** Total failure to reach goal.
+**Result (paper-eval, 600 trials):** **0/600 = 0.0 %.** All 600 timeout.
+**Diagnosis:** Same failure mode as the older `jm45ebyr` (h256 +
+e7sadb3v): doubling MLP width without retuning LR or training longer
+prevents convergence. Wandb `success=0.99` is misleading — that metric
+counts touching the goal box at any point during a long episode, but
+the policy never produces clean reaches and paper-eval terminates on
+neither reach nor collision under the current setup → all timeout.
+**Conclusion:** **`hidden_size=256` is dead at 500 M.** Future MLP
+capacity experiments would need (a) larger learning rate or (b) much
+longer training. Not worth pursuing without an LR retune.
+**Followup:** Skip h256. If touching architecture, prefer changing depth
+(more layers) or RNN beyond MinGRU rather than just widening the MLP.
+
