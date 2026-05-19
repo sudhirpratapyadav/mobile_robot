@@ -5,9 +5,13 @@
 #
 # Usage (inside container):
 #   bash tools/eval_run.sh <wandb_run_id> [final_ckpt_basename] [extra-dyna_train flags...]
+#   # Override paper-eval rotation (default = 90, open wall on +y):
+#   ROTATION=0  bash tools/eval_run.sh ...   # original +x→−x corridor
+#   ROTATION=90 bash tools/eval_run.sh ...   # rotated, open wall on top (default)
 #
 # Reads from /puffertank/host/dyna_barn/runs/train/dyna_train/<run_id>/.
-# Writes to {train_dist_render,eval_paper}/ under the same run dir.
+# Writes to {train_dist_render, eval_paper_rot${ROTATION}}/ under the
+# same run dir (or eval_paper/ when ROTATION=0 for back-compat).
 #
 # Extra flags after the ckpt basename are passed to the train-distribution
 # ./dyna_train invocation (e.g. --arena 20 --max-obstacles 15) so the
@@ -62,12 +66,21 @@ python "$HOST/tools/render_train_dist_webms.py" \
     --arena-half "$ARENA_HALF"
 
 echo
-echo "=== paper eval (60 × 10) ==="
-bash "$HOST/run_eval_published.sh" "$CKPT" 10 600
+echo "=== paper eval (60 × 10, rotation=90) ==="
+# Default to the rotated paper-eval (open wall on +y). Callers that want
+# the original rot=0 setup can set ROTATION=0 explicitly.
+EVAL_ROTATION="${ROTATION:-90}"
+if [ "$EVAL_ROTATION" = "0" ]; then
+    EVAL_TAG="eval_paper"
+else
+    EVAL_TAG="eval_paper_rot${EVAL_ROTATION}"
+fi
+EXTRA_EVAL_ARGS="--rotation ${EVAL_ROTATION}" OUT_DIR_TAG="$EVAL_TAG" \
+    bash "$HOST/run_eval_published.sh" "$CKPT" 10 600
 
 CKPT_STEM=$(basename "$CKPT" .bin)
-PER_WORLD_DIR="$RUN_DIR/eval_paper/$CKPT_STEM/per_world"
-PAPER_WEBMS="$RUN_DIR/eval_paper/$CKPT_STEM/webms"
+PER_WORLD_DIR="$RUN_DIR/$EVAL_TAG/$CKPT_STEM/per_world"
+PAPER_WEBMS="$RUN_DIR/$EVAL_TAG/$CKPT_STEM/webms"
 mkdir -p "$PAPER_WEBMS"
 python "$HOST/tools/render_eval_gifs.py" \
     --per-world-dir "$PER_WORLD_DIR" \
@@ -79,7 +92,7 @@ echo
 echo "=== summary ==="
 python -c "
 import json
-d = json.loads(open('$RUN_DIR/eval_paper/$CKPT_STEM/summary.json').read())
+d = json.loads(open('$RUN_DIR/$EVAL_TAG/$CKPT_STEM/summary.json').read())
 print(f'PAPER:   {d[\"overall\"]}')
 for k, v in d['by_difficulty'].items():
     print(f'  {k:8s} {v[\"success\"]}/{v[\"n\"]} ({100*v[\"success\"]/v[\"n\"]:.1f}%)  coll={v[\"collision\"]}  to={v[\"timeout\"]}')
