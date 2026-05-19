@@ -1809,3 +1809,50 @@ TD-clean curves through PPO-tested values 5, 10, 20 already showed
 β=10 ≈ 67 % beat β=20 ≈ 56 % beat β=5 ≈ unknown — but earlier
 ablations rolled out β=10 as the peak). Skip.
 
+---
+
+### `cirvxgwz` (group: `beta10_a35_obs8to30_speed05to5`) — mndgrcil + arena=35 — REGRESSED
+
+**Trained:** 2026-05-19, GPU 1, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/cirvxgwz
+**Hypothesis:** Map the arena curve on the smaller side of a40 to see if
+the open-arena win drops smoothly or has a cliff.
+**Config delta:** `--env.arena-size 35.0` (else = mndgrcil king).
+**Result (wandb final):** clean=0.126, success=0.985, coll=0.984.
+**Result (train-dist, 100 ep):** verdicts = **32 clean_reach / 67
+reached_dirty / 1 collision.** Worst TD-clean of any speed=5 variant.
+**Result (paper-eval, 600 trials):** **22.0 %** overall
+(132 success / 402 collision / 66 timeout).
+Easy **27.5 %**, Medium **20.0 %**, **Hard 18.5 %.**
+**Diagnosis:** a35 collapses to 22 % paper — virtually identical to a45
+(22.7 %). The arena curve is **strikingly non-monotonic** with a knife-
+edge peak at a40:
+
+| arena | Paper |
+|------:|------:|
+| 24    | 44.7  |
+| 35    | 22.0  |
+| **40** ⭐ | **75.0** |
+| 45    | 22.7  |
+
+a40 is a **2.7× lift** over neighboring values 35 and 45 — almost a
+coincidence point, not a smooth optimum. Both a35 and a45 are *worse
+than the much smaller a24 baseline* — they're not just sub-optimal,
+they're broken.
+**Conclusion:** a40 is a **bizarre singular peak**, not a smooth local
+optimum. Don't sweep arena further. The 75 % result may itself depend
+on subtle interactions (e.g. specific ratio of arena to eval arena, or
+to obstacle density) that we don't understand.
+**Followup:** Maybe try a39 or a41 to see if the peak is truly a single
+point. But priority is to explore other axes (σ_o, history, motion
+variety) at the locked a40+speed=5 anchor.
+
+### Final arena curve (post-cirvxgwz)
+
+| arena | run_id    | Paper | TD-clean |
+|------:|-----------|------:|---------:|
+| 24    | e7sadb3v  | 44.7  | 51       |
+| 35    | cirvxgwz  | 22.0  | 32       |
+| **40** ⭐ | **mndgrcil** | **75.0** | — |
+| 45    | 7itjyj5u  | 22.7  | 56       |
+
