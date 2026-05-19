@@ -998,6 +998,18 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `ubdwb7xu` (group: `beta10_a40_obs8to30_speed05to7`) — speed=7 — MID
+
+**Trained:** 2026-05-19 ~03:54 UTC, GPU 0, 500M
+**Config delta:** `--env.speed-max 7.0`.
+**Wandb final:** clean=0.17, success=1.00, coll=0.98.
+**Paper-eval:** **44.3 %** (E 62 / M 37 / H 34).
+**Diagnosis:** Recovers from speed=6's dip but stays below speed=5's 75%.
+Speed sweep is non-monotonic + noisy: 2→44.7, 3→47, 4→47.8, **5→75**,
+6→28.7, 7→44.3. mndgrcil's speed=5 is a special peak, not a smooth scaling.
+
+---
+
 ### `w1mzz7c1` (group: `beta10_a40_obs8to30_speed05to6`) — speed=6 — REGRESSED
 
 **Trained:** 2026-05-19 ~04:36 UTC, GPU 1, 500M
