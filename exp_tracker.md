@@ -998,6 +998,30 @@ Single-σ_o won't beat e7sadb3v overall.
 
 ---
 
+### `61ej0400` (group: `beta10_a40_obs8to30_speed05to5_1B`) — mndgrcil × 1B steps — REGRESSED
+
+**Trained:** 2026-05-19 ~04:34 UTC, GPU 1, 1B
+**Config delta vs mndgrcil:** `--train.total-timesteps 1000000000` (was 500M).
+**Wandb final:** clean=0.19, success=0.99, coll=0.97, final_d=0.97.
+**Train-dist:** clean_reach 58 %, reached_dirty 40 %.
+**Paper-eval (1B ckpt = 999.8M):** **47.0 %** (E 46 / M 49.5 / H 45.5).
+**Comparison vs ckpt history:**
+  ckpt    Paper   E    M    H
+  262M    65.5%   70.5 72   54
+  **500M ⭐ 75.0%**  85   78.5 61.5
+  1B      47.0%   46   49.5 45.5
+
+**Diagnosis:** PPO over-training past 500M degrades the policy. Same
+phenomenon as e7sadb3v and jcah53tw earlier — the wandb metric kept
+slowly improving (clean 0.19 → 0.19) but paper-eval dropped massively.
+The 500M is a **stable peak**, but training past it is harmful.
+
+**Conclusion:** Early-stopping at ~500M is part of the mndgrcil recipe.
+Don't extend training past 500M without explicit intervention (lr decay,
+adaptive entropy, replay).
+
+---
+
 ### `6odijl5a` (group: `beta10_a40_obs8to40_speed05to5`) — mndgrcil + obs 8-40 — TOTAL COLLAPSE
 
 **Trained:** 2026-05-19 ~06:09 UTC, GPU 0, 500M
