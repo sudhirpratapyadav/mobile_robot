@@ -174,6 +174,18 @@ typedef struct {
     float alpha_short, sigma_short;
     float alpha_med,   sigma_med;
     float alpha_long,  sigma_long;
+    // Forward-cone × distance density mute on the goal-attraction terms
+    // (added 2026-05-19 to address "robot never stops near obstacles").
+    // Per step, computes a local-density signal:
+    //   ρ = Σᵢ exp(−dᵢ²/(2·σ_d²)) · ((1+cos φᵢ)/2)^κ
+    // where dᵢ is robot↔obstacle distance and φᵢ is the obstacle's
+    // bearing in body frame (0 = directly ahead, ±π = directly behind).
+    // Then the multi-scale goal Gaussians are multiplied by:
+    //   mute = exp(−λ · ρ)
+    // mute_lambda = 0 disables the mute (=> baseline reward).
+    float mute_sigma_d;     // distance bandwidth (default 1.0)
+    float mute_cone_kappa;  // cone sharpness; 0 = omni-directional (default 1.0)
+    float mute_lambda;      // overall strength; 0 = OFF (default 0.0)
     // No-termination mode: when terminate_on_goal=0 the goal touch does NOT
     // end the episode (robot can dwell), and when terminate_on_collision=0
     // collisions do NOT end the episode (robot keeps going through).
@@ -547,17 +559,51 @@ void c_step(DynaTrain* env) {
     // Multi-scale Gaussian goal attraction — current primary signal.
     // Each scale gives a soft "proximity" reward at its own range; sum
     // gives a smooth gradient at all distances.
+    //
+    // Optionally muted by a forward-cone × distance density signal so
+    // the policy isn't pulled forward when obstacles are close ahead.
+    // ρ = Σᵢ exp(−dᵢ²/(2·σ_d²)) · ((1+cos φᵢ)/2)^κ
+    // mute = exp(−λ · ρ). mute_lambda == 0 disables (baseline reward).
+    float goal_mute = 1.0f;
+    if (env->mute_lambda > 0.0f) {
+        float sd2 = env->mute_sigma_d * env->mute_sigma_d;
+        float inv2sd2 = (sd2 > 0.0f) ? 0.5f / sd2 : 0.0f;
+        float cos_th = cosf(env->robot.theta);
+        float sin_th = sinf(env->robot.theta);
+        float rho = 0.0f;
+        for (int i = 0; i < env->num_obstacles; i++) {
+            float dx = env->obs_x[i] - env->robot.x;
+            float dy = env->obs_y[i] - env->robot.y;
+            float d2 = dx*dx + dy*dy;
+            // Body-frame x (forward axis projection).
+            float bx = dx * cos_th + dy * sin_th;
+            float d  = sqrtf(d2);
+            // cos φ = bx / d (clamped to avoid NaN at d=0).
+            float cos_phi = (d > 1e-6f) ? (bx / d) : 1.0f;
+            if (cos_phi >  1.0f) cos_phi =  1.0f;
+            if (cos_phi < -1.0f) cos_phi = -1.0f;
+            float cone = 0.5f * (1.0f + cos_phi);   // ∈ [0, 1]
+            if (env->mute_cone_kappa > 0.0f) {
+                cone = powf(cone, env->mute_cone_kappa);
+            } else {
+                cone = 1.0f;   // κ=0 ⇒ omni-directional
+            }
+            float w_dist = expf(-d2 * inv2sd2);
+            rho += w_dist * cone;
+        }
+        goal_mute = expf(-env->mute_lambda * rho);
+    }
     if (env->alpha_short > 0.0f && env->sigma_short > 0.0f) {
         float s2 = env->sigma_short * env->sigma_short;
-        r += env->alpha_short * expf(-(dist * dist) / s2);
+        r += goal_mute * env->alpha_short * expf(-(dist * dist) / s2);
     }
     if (env->alpha_med > 0.0f && env->sigma_med > 0.0f) {
         float s2 = env->sigma_med * env->sigma_med;
-        r += env->alpha_med * expf(-(dist * dist) / s2);
+        r += goal_mute * env->alpha_med * expf(-(dist * dist) / s2);
     }
     if (env->alpha_long > 0.0f && env->sigma_long > 0.0f) {
         float s2 = env->sigma_long * env->sigma_long;
-        r += env->alpha_long * expf(-(dist * dist) / s2);
+        r += goal_mute * env->alpha_long * expf(-(dist * dist) / s2);
     }
 
     // ───── Goal & collision events ─────

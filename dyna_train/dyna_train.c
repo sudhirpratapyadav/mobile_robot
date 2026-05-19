@@ -77,6 +77,9 @@ static DynaTrain make_env(unsigned int seed, const char* ini_path) {
         .sigma_med          = G_F("sigma_med",         10.0f),
         .alpha_long         = G_F("alpha_long",         0.4f),
         .sigma_long         = G_F("sigma_long",        20.0f),
+        .mute_sigma_d       = G_F("mute_sigma_d",       1.0f),
+        .mute_cone_kappa    = G_F("mute_cone_kappa",    1.0f),
+        .mute_lambda        = G_F("mute_lambda",        0.0f),
         .terminate_on_goal      = G_I("terminate_on_goal",      0),
         .terminate_on_collision = G_I("terminate_on_collision", 0),
         .mw_poly            = G_I("mw_poly",            1),
@@ -289,6 +292,9 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--min-std") && i+1 < argc)          env.std_min = atof(argv[++i]);
         else if (!strcmp(argv[i], "--max-std") && i+1 < argc)          env.std_max = atof(argv[++i]);
         else if (!strcmp(argv[i], "--goal-radius") && i+1 < argc)      env.goal_radius = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--mute-sigma-d") && i+1 < argc)     env.mute_sigma_d = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--mute-cone-kappa") && i+1 < argc)  env.mute_cone_kappa = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--mute-lambda") && i+1 < argc)      env.mute_lambda = atof(argv[++i]);
     }
 
     if (traj) {

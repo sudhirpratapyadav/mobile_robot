@@ -1745,6 +1745,50 @@ strikingly asymmetric (steeper on the slow side).
 
 ---
 
+### Lever-A sweep: forward-cone × distance density mute (2026-05-19) — DEAD AXIS
+
+**Hypothesis:** robot "never stops near obstacles" because the multi-
+scale goal-attraction reward pulls it forward even when β-repulsion
+says back off. Try multiplying the goal Gaussians by:
+```
+ρ = Σᵢ exp(−dᵢ²/(2σ_d²)) · ((1+cos φᵢ)/2)^κ
+mute = exp(−λ · ρ)
+```
+where φᵢ is each obstacle's bearing in body frame (0 = ahead, π = behind).
+Three knobs: σ_d (distance bandwidth), κ (cone sharpness, 0=omni), λ
+(strength, 0=disabled).
+
+**Implementation:** 3 new env fields plumbed through INI / CLI /
+PufferLib kwargs. Default `mute_lambda=0` ⇒ bit-identical to king.
+
+**4-cell sweep at σ_d=1.0, mndgrcil base recipe:**
+
+| κ | λ | run_id   | TD-clean | Paper rot=90 | E    | M    | H    | Δ vs king |
+|--:|--:|----------|---------:|-------------:|-----:|-----:|-----:|----------:|
+| — | 0 | mndgrcil |     —    | **55.0**     | 75.0 | 62.0 | 28.0 |  0        |
+| 2 | 1 | iaiysbp8 | 0.248    | 44.8         | 62.5 | 49.5 | 22.5 | −10.2     |
+| 2 | 2 | 1aljlz8c | 0.229    | 27.8         | 38.5 | 33.5 | 11.5 | −27.2     |
+| 0 | 1 | p9hhduhw | 0.227    | **1.7**      |  5.0 |  0.0 |  0.0 | −53.3     |
+| 0 | 2 | aazavzzz | 0.174    | 27.0         | 41.0 | 29.5 | 10.5 | −28.0     |
+
+**Diagnosis:** ALL four cells regressed. Muting the goal-attraction
+silences the only positive reward signal when obstacles are nearby.
+The policy then has nothing to optimize for in those moments — it just
+collides or times out instead of stopping. We removed the lighthouse
+and expected the boat to steer better.
+
+The cone (κ=2 vs κ=0) helps marginally at λ=1 (44.8% vs 1.7%) — at
+least keeping the goal pull when obstacles are *behind* preserves
+some navigation. But at λ=2 the cone is irrelevant (both ~28%).
+
+**Conclusion:** Lever A is **a dead axis**. Reverting to king (mute_lambda=0
+default in INI). The "robot doesn't stop" problem cannot be fixed by
+*subtracting* the goal pull; we need to *add* a stopping incentive
+(stationarity bonus near obstacles, predict-and-wait reward, or
+amplified forward-cone β-repulsion).
+
+---
+
 ### `7itjyj5u` (group: `beta10_a45_obs8to30_speed05to5`) — mndgrcil + arena=45 — REGRESSED
 
 **Trained:** 2026-05-19, GPU 1, 500 M steps
