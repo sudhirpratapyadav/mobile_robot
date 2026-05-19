@@ -1692,3 +1692,54 @@ Updates speed-sweep map below.
 | 6.0       | g3kvfo60  | 28.7  | 35.0 | 27.0 | 24.0 |
 | 7.0       | xsob087y  | 44.3  | 62.0 | 37.0 | 34.0 |
 
+---
+
+### `kx9mk22s` (group: `beta10_a40_obs8to30_speed05to45`) — mndgrcil + speed_max=4.5 — SHARP REGRESSION
+
+**Trained:** 2026-05-19, GPU 0, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/kx9mk22s
+**Hypothesis:** Fine-sweep around speed=5 peak from below: probe 4.5 to
+confirm symmetric decay and prove 5.0 is the global peak in [4, 5.5].
+**Config delta:** `--env.speed-max 4.5` (else = mndgrcil king).
+**Result (wandb final):** clean=0.278, success=0.998, coll=0.958.
+**Result (train-dist, 100 ep):** verdicts = **54 clean_reach / 42
+reached_dirty / 3 collision / 1 timeout.** Best TD-clean of any non-king
+variant — slightly above mndgrcil itself.
+**Result (paper-eval, 600 trials):** **32.7 %** overall
+(196 success / 336 collision / 68 timeout).
+Easy **34.0 %**, Medium **24.0 %**, Hard **40.0 %**.
+**Diagnosis:** Speed=5 peak is **ASYMMETRIC** — 4.5 collapses worse
+than 6.0 (32.7 % vs 28.7 %, only 4 pp apart but losing 42–46 pp from
+5.0). The slow side of the peak collapses harder than the fast side.
+Hypothesis: at speed=4.5 the obstacle distribution is too similar to
+e7sadb3v-style slow obstacles, but the policy was trained on a *narrower*
+speed range than e7sadb3v's [0.5, 2.0] — missing the speed=2 baseline's
+discriminative pressure.
+Also: TD-clean 54 > paper 32.7 % is another clean refutation of TD-clean
+as a paper-predictor. The mndgrcil-recipe-with-X variants consistently
+have wandb-mid clean but variable paper.
+Per-difficulty H > M (40 vs 24) is unusual — hard worlds with their
+mix of fast obstacles may benefit from the partial fast-obstacle
+training, while medium worlds (mostly slow) get hit by missing the
+slow-end of the speed range.
+**Conclusion:** Speed=5 peak is narrower on the SLOW side than the
+fast side. Don't probe below 5.0 again. Don't push above 5.5 either.
+**Followup:** Speed axis is exhausted. Focus on other axes (arena,
+σ_o, β) at speed=5.
+
+### Final speed sweep (post-kx9mk22s and 3yu2eo2v)
+
+| speed_max | Paper | TD-clean | E    | M    | H    | comment |
+|-----------|------:|---------:|-----:|-----:|-----:|---|
+| 2.0       | 44.7  | 51       | 55.5 | 44.5 | 34.0 | e7sadb3v baseline |
+| 3.0       | 47.0  | —        | 48.5 | 49.5 | 43.0 | |
+| 4.0       | 47.8  | —        | 48.5 | 44.5 | 50.5 | first H > E |
+| 4.5       | 32.7  | **54**   | 34.0 | 24.0 | 40.0 | SHARP regression below peak |
+| **5.0** ⭐ | **75.0** | —     | **85.0** | **78.5** | **61.5** | king |
+| 5.5       | 63.2  | 48       | 73.0 | 67.0 | 49.5 | 2nd place |
+| 6.0       | 28.7  | —        | 35.0 | 27.0 | 24.0 | symmetric ~ -46 pp |
+| 7.0       | 44.3  | —        | 62.0 | 37.0 | 34.0 | rebound |
+
+Speed=5 is the global peak across the full sweep and the peak is
+strikingly asymmetric (steeper on the slow side).
+
