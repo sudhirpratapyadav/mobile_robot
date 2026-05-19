@@ -1743,3 +1743,36 @@ fast side. Don't probe below 5.0 again. Don't push above 5.5 either.
 Speed=5 is the global peak across the full sweep and the peak is
 strikingly asymmetric (steeper on the slow side).
 
+---
+
+### `7itjyj5u` (group: `beta10_a45_obs8to30_speed05to5`) — mndgrcil + arena=45 — REGRESSED
+
+**Trained:** 2026-05-19, GPU 1, 500 M steps
+**Wandb:** https://wandb.ai/sudhirpratapyadav-indian-institute-of-technology-jodhpur/dyna_barn/runs/7itjyj5u
+**Hypothesis:** a40 was a major step up from a24 (40qb3qf0 had highest
+prior TD-clean ~80 %). Mndgrcil locked a40 to speed=5; probe whether
+the open-arena ceiling extends further — a45 even more open.
+**Config delta:** `--env.arena-size 45.0` (else = mndgrcil king).
+**Result (wandb final):** clean=0.326, success=0.997, coll=0.939.
+**Result (train-dist, 100 ep):** verdicts = **56 clean_reach / 42
+reached_dirty / 1 timeout / 1 collision.** Highest TD-clean of any
+non-king variant so far.
+**Result (paper-eval, 600 trials):** **22.7 %** overall
+(136 success / 404 collision / 60 timeout).
+Easy **21.0 %**, Medium **17.5 %**, Hard **29.5 %**.
+**Diagnosis:** Open-arena ceiling **does not extend past a40 at speed=5**.
+a45 collapses badly on paper (−52 pp from king). H > E > M again
+(odd pattern, same as kx9mk22s). Hypothesis: when training arena gets
+too large vs the 20 m eval arena, the policy learns navigation patterns
+(e.g. wider arcs) that don't fit the constrained eval. TD-clean stays
+high because the policy *does* navigate well in its native (a45)
+distribution.
+This is the **third clean refutation** today of TD-clean as paper-eval
+proxy: kx9mk22s (TD 54 / paper 32.7), 3yu2eo2v (TD 48 / paper 63.2),
+7itjyj5u (TD 56 / paper 22.7). The TD-clean and paper-eval rankings
+disagree dramatically.
+**Conclusion:** **a40 is the arena king. Don't push above.** The
+arena=40 → 45 step actually loses *more* paper than 40 → 24 (e7sadb3v).
+**Followup:** Probe a35 (in-flight) to map the arena curve on the
+smaller side. Then arena axis is done.
+
