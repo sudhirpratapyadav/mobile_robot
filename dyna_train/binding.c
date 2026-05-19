@@ -55,6 +55,11 @@ void my_init(Env* env, Dict* kwargs) {
     env->mute_sigma_d       = dict_get(kwargs, "mute_sigma_d")->value;
     env->mute_cone_kappa    = dict_get(kwargs, "mute_cone_kappa")->value;
     env->mute_lambda        = dict_get(kwargs, "mute_lambda")->value;
+    env->alpha_ttc          = dict_get(kwargs, "alpha_ttc")->value;
+    env->tau_ttc            = dict_get(kwargs, "tau_ttc")->value;
+    env->gamma_fwd          = dict_get(kwargs, "gamma_fwd")->value;
+    env->alpha_wait         = dict_get(kwargs, "alpha_wait")->value;
+    env->sigma_v            = dict_get(kwargs, "sigma_v")->value;
     env->terminate_on_goal      = (int)dict_get(kwargs, "terminate_on_goal")->value;
     env->terminate_on_collision = (int)dict_get(kwargs, "terminate_on_collision")->value;
     env->goal_box_half          = dict_get(kwargs, "goal_box_half")->value;

@@ -80,6 +80,11 @@ static DynaTrain make_env(unsigned int seed, const char* ini_path) {
         .mute_sigma_d       = G_F("mute_sigma_d",       1.0f),
         .mute_cone_kappa    = G_F("mute_cone_kappa",    1.0f),
         .mute_lambda        = G_F("mute_lambda",        0.0f),
+        .alpha_ttc          = G_F("alpha_ttc",          0.0f),
+        .tau_ttc            = G_F("tau_ttc",            1.0f),
+        .gamma_fwd          = G_F("gamma_fwd",          0.0f),
+        .alpha_wait         = G_F("alpha_wait",         0.0f),
+        .sigma_v            = G_F("sigma_v",            0.5f),
         .terminate_on_goal      = G_I("terminate_on_goal",      0),
         .terminate_on_collision = G_I("terminate_on_collision", 0),
         .mw_poly            = G_I("mw_poly",            1),
@@ -295,6 +300,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--mute-sigma-d") && i+1 < argc)     env.mute_sigma_d = atof(argv[++i]);
         else if (!strcmp(argv[i], "--mute-cone-kappa") && i+1 < argc)  env.mute_cone_kappa = atof(argv[++i]);
         else if (!strcmp(argv[i], "--mute-lambda") && i+1 < argc)      env.mute_lambda = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--alpha-ttc") && i+1 < argc)        env.alpha_ttc = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--tau-ttc") && i+1 < argc)          env.tau_ttc = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--gamma-fwd") && i+1 < argc)        env.gamma_fwd = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--alpha-wait") && i+1 < argc)       env.alpha_wait = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--sigma-v") && i+1 < argc)          env.sigma_v = atof(argv[++i]);
     }
 
     if (traj) {

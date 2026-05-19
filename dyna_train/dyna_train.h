@@ -129,6 +129,11 @@ typedef struct {
     ObstacleTrajectory traj[MAX_OBSTACLES];
     float obs_x[MAX_OBSTACLES];
     float obs_y[MAX_OBSTACLES];
+    // Previous-step obstacle positions, for discrete velocity estimation
+    // used by the TTC (Lever B) reward term. Initialised to current on
+    // c_reset (so first step's v_obs is 0).
+    float prev_obs_x[MAX_OBSTACLES];
+    float prev_obs_y[MAX_OBSTACLES];
 
     // Episode state
     int tick;
@@ -186,6 +191,25 @@ typedef struct {
     float mute_sigma_d;     // distance bandwidth (default 1.0)
     float mute_cone_kappa;  // cone sharpness; 0 = omni-directional (default 1.0)
     float mute_lambda;      // overall strength; 0 = OFF (default 0.0)
+    // -- Lever B (TTC penalty): "time-to-closest-approach"-shaped penalty
+    //    per obstacle.  Requires per-obstacle discrete velocity, which is
+    //    estimated as (obs_xy_t − obs_xy_{t−1}) / dt and stored in
+    //    prev_obs_x / prev_obs_y. r −= α_ttc · Σᵢ exp(−ttc_i / τ_ttc) for
+    //    converging pairs; diverging pairs contribute 0.
+    //    α_ttc = 0 disables.
+    float alpha_ttc;        // strength (default 0.0 = OFF)
+    float tau_ttc;          // time constant in seconds (default 1.0)
+    // -- Lever C (forward-cone β amplification): scales β-repulsion of the
+    //    *closest* obstacle by (1 + γ · cone(φ)) where cone uses
+    //    mute_cone_kappa as the sharpness. Goal pull untouched.
+    //    gamma_fwd = 0 disables.
+    float gamma_fwd;        // amplification of β in forward cone (default 0.0)
+    // -- Lever D (stationarity bonus near obstacles): small positive r when
+    //    (close to closest obstacle) AND (low robot speed).
+    //    r += α_wait · exp(−d_min²/σ_o²) · exp(−|v|²/σ_v²)
+    //    α_wait = 0 disables.
+    float alpha_wait;       // strength (default 0.0)
+    float sigma_v;          // speed bandwidth (default 0.5 m/s)
     // No-termination mode: when terminate_on_goal=0 the goal touch does NOT
     // end the episode (robot can dwell), and when terminate_on_collision=0
     // collisions do NOT end the episode (robot keeps going through).
@@ -479,6 +503,11 @@ void c_reset(DynaTrain* env) {
     }
 
     update_obstacles(env);
+    // Initialise prev_obs to current so the first c_step sees v_obs = 0.
+    for (int i = 0; i < env->num_obstacles; i++) {
+        env->prev_obs_x[i] = env->obs_x[i];
+        env->prev_obs_y[i] = env->obs_y[i];
+    }
     env->prev_dist = robot_to_goal_dist(env);
     compute_obs(env);
 }
@@ -539,13 +568,71 @@ void c_step(DynaTrain* env) {
     if (env->gamma_d != 0.0f) {
         r += env->gamma_d * (env->prev_dist - dist);
     }
-    // Obstacle Gaussian repulsion (DEPRECATED, set beta=0 to disable)
+    // Obstacle Gaussian repulsion (set beta=0 to disable).
+    //
+    // Lever C: if gamma_fwd > 0, the repulsion is *amplified* in the
+    // forward cone of the closest obstacle by factor (1 + γ · cone(φ_min))
+    // where cone uses mute_cone_kappa as the sharpness. Goal pull is
+    // untouched, but a forward-blocking obstacle costs more than a
+    // side/back one. γ=0 reduces to baseline.
     if (env->beta > 0.0f) {
-        float d_obs = closest_obstacle_dist(env);
-        if (d_obs < 1e3f) {
-            float sig2 = env->sigma_o * env->sigma_o;
-            r -= env->beta * expf(-(d_obs * d_obs) / sig2);
+        int   i_min = -1;
+        float d2_min = 1e30f;
+        for (int i = 0; i < env->num_obstacles; i++) {
+            float dx = env->obs_x[i] - env->robot.x;
+            float dy = env->obs_y[i] - env->robot.y;
+            float d2 = dx*dx + dy*dy;
+            if (d2 < d2_min) { d2_min = d2; i_min = i; }
         }
+        if (i_min >= 0) {
+            float sig2 = env->sigma_o * env->sigma_o;
+            float gauss = expf(-d2_min / sig2);
+            float amp = 1.0f;
+            if (env->gamma_fwd > 0.0f) {
+                float dx = env->obs_x[i_min] - env->robot.x;
+                float dy = env->obs_y[i_min] - env->robot.y;
+                float d  = sqrtf(d2_min);
+                float bx = dx * cosf(env->robot.theta) + dy * sinf(env->robot.theta);
+                float cos_phi = (d > 1e-6f) ? (bx / d) : 1.0f;
+                if (cos_phi >  1.0f) cos_phi =  1.0f;
+                if (cos_phi < -1.0f) cos_phi = -1.0f;
+                float cone = 0.5f * (1.0f + cos_phi);
+                if (env->mute_cone_kappa > 0.0f) cone = powf(cone, env->mute_cone_kappa);
+                amp = 1.0f + env->gamma_fwd * cone;
+            }
+            r -= env->beta * gauss * amp;
+        }
+    }
+
+    // Lever B: TTC (time-to-closest-approach) penalty, summed over all
+    // obstacles. Uses prev_obs_{x,y} to estimate per-obstacle velocity:
+    //   v_obs = (now − prev) / dt
+    //   v_rel = v_obs − v_robot          (v_robot in world frame)
+    //   d_rel = obs_pos − robot_pos
+    //   ttc   = − (d_rel · v_rel) / |v_rel|²
+    // ttc < 0 (diverging) → no penalty. Closing-fast obstacles give a
+    // sharp exp(−ttc / τ) penalty.
+    // α_ttc = 0 disables.
+    if (env->alpha_ttc > 0.0f && env->dt > 1e-6f) {
+        float vrx = env->robot.v * cosf(env->robot.theta);
+        float vry = env->robot.v * sinf(env->robot.theta);
+        float inv_dt = 1.0f / env->dt;
+        float inv_tau = (env->tau_ttc > 1e-6f) ? (1.0f / env->tau_ttc) : 1.0f;
+        float ttc_sum = 0.0f;
+        for (int i = 0; i < env->num_obstacles; i++) {
+            float dx = env->obs_x[i] - env->robot.x;
+            float dy = env->obs_y[i] - env->robot.y;
+            float vox = (env->obs_x[i] - env->prev_obs_x[i]) * inv_dt;
+            float voy = (env->obs_y[i] - env->prev_obs_y[i]) * inv_dt;
+            float vx  = vox - vrx;
+            float vy  = voy - vry;
+            float v2  = vx*vx + vy*vy;
+            if (v2 < 1e-6f) continue;       // no relative motion
+            float ttc = -(dx*vx + dy*vy) / v2;
+            if (ttc <= 0.0f) continue;      // diverging / past closest approach
+            ttc_sum += expf(-ttc * inv_tau);
+        }
+        r -= env->alpha_ttc * ttc_sum;
     }
     // Single-scale goal-attraction Gaussian (DEPRECATED, set alpha_g=0)
     if (env->alpha_g > 0.0f && env->sigma_g > 0.0f) {
@@ -604,6 +691,23 @@ void c_step(DynaTrain* env) {
     if (env->alpha_long > 0.0f && env->sigma_long > 0.0f) {
         float s2 = env->sigma_long * env->sigma_long;
         r += goal_mute * env->alpha_long * expf(-(dist * dist) / s2);
+    }
+
+    // Lever D: stationarity bonus near obstacles.
+    //   r += α_wait · exp(−d_min² / σ_o²) · exp(−|v|² / σ_v²)
+    // Positive only when close to any obstacle AND slow. Far from obs ⇒
+    // exp(-d_min/σ_o)² ≈ 0 ⇒ no incentive to dawdle in open space.
+    // α_wait = 0 disables.
+    if (env->alpha_wait > 0.0f) {
+        float d_min = closest_obstacle_dist(env);
+        if (d_min < 1e3f) {
+            float sig2 = env->sigma_o * env->sigma_o;
+            float prox = expf(-(d_min * d_min) / sig2);
+            float sv2  = (env->sigma_v > 0.0f) ? (env->sigma_v * env->sigma_v) : 0.25f;
+            float vmag2 = env->robot.v * env->robot.v;  // forward-velocity²
+            float slow = expf(-vmag2 / sv2);
+            r += env->alpha_wait * prox * slow;
+        }
     }
 
     // ───── Goal & collision events ─────
@@ -669,6 +773,12 @@ void c_step(DynaTrain* env) {
     env->episode_return += r;
     env->terminals[0] = (ends_on_goal || ends_on_collision) ? 1.0f : 0.0f;
     env->prev_dist = dist;
+    // Snapshot current obstacle positions for next-step velocity estimate
+    // (Lever B / TTC term). Safe to keep updating even when alpha_ttc=0.
+    for (int i = 0; i < env->num_obstacles; i++) {
+        env->prev_obs_x[i] = env->obs_x[i];
+        env->prev_obs_y[i] = env->obs_y[i];
+    }
 
     if (ends_on_goal || ends_on_collision || truncated) {
         // Logging uses the latched per-episode flags so success/collision
