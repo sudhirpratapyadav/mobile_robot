@@ -114,6 +114,32 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
         -e 's/STANDALONE_LDFLAGS=(-lGL)/STANDALONE_LDFLAGS=(-lGL -ldl -lrt)/' \
         -e 's|NVCC="ccache \(.*\)"|NVCC="\1"|' \
         build.sh
+
+    # Inject NCCL_IFLAG / NCCL_LFLAG (build.sh assumed system-installed nccl)
+    # using nvidia-nccl-cu12 wheel paths from the venv.
+    NCCL_PY='python -c "import nvidia.nccl, os; print(os.path.join(nvidia.nccl.__path__[0]))"'
+    # Insert detection block after the CUDNN block (idempotent — guarded by
+    # the marker check above).
+    awk -v py="$NCCL_PY" '
+        /^if \[ -z "\$CUDNN_LFLAG" \]; then$/ { inblock=1 }
+        inblock && /^fi$/ {
+            print
+            print ""
+            print "NCCL_IFLAG=$(" py " 2>/dev/null | xargs -I{} echo -I{}/include)"
+            print "NCCL_LFLAG=$(" py " 2>/dev/null | xargs -I{} echo -L{}/lib)"
+            inblock=0
+            next
+        }
+        { print }
+    ' build.sh > build.sh.tmp && mv build.sh.tmp build.sh
+    chmod +x build.sh
+
+    # Add NCCL flags to the include + link lines (cudnn block already pattern).
+    sed -i \
+        -e 's|-I\$CUDA_HOME/include \$CUDNN_IFLAG|-I$CUDA_HOME/include $CUDNN_IFLAG $NCCL_IFLAG|g' \
+        -e 's|-L\$CUDA_HOME/lib64 \$CUDNN_LFLAG|-L$CUDA_HOME/lib64 $CUDNN_LFLAG $NCCL_LFLAG|g' \
+        build.sh
+
     echo "# CLUSTER PATCHED" >> build.sh
 fi
 
