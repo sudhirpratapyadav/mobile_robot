@@ -109,6 +109,8 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
         -e 's/-Wno-error=incompatible-pointer-types-discards-qualifiers//g' \
         -e 's/-Wno-incompatible-pointer-types-discards-qualifiers//g' \
         -e 's/-Wno-deprecated-declarations//g' \
+        -e 's/-Wno-error=array-parameter//g' \
+        -e 's/-Werror=incompatible-pointer-types//g' \
         build.sh
     echo "# CLUSTER PATCHED" >> build.sh
 fi
