@@ -9,7 +9,9 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
+#ifndef DYNA_HEADLESS
 #include "raylib.h"
+#endif
 
 #include "dyna_eval.h"
 #include "puffernet.h"
@@ -185,6 +187,12 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+#ifdef DYNA_HEADLESS
+    // No-traj + headless build = nothing to do.
+    fprintf(stderr, "dyna_eval: built without raylib (DYNA_HEADLESS); "
+                    "pass --traj for non-interactive trajectory dump.\n");
+    return 0;
+#else
     // Interactive raylib mode
     srand(seed);
     DynaEval env = make_env(seed, arena_size, max_steps, dt,
@@ -204,4 +212,5 @@ int main(int argc, char** argv) {
     c_close(&env);
     free_allocated(&env);
     return 0;
+#endif
 }

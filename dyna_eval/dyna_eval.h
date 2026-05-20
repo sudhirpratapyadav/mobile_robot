@@ -16,7 +16,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <math.h>
+#ifndef DYNA_HEADLESS
 #include "raylib.h"
+#else
+// Minimal stubs so the rest of this header compiles without raylib.
+typedef struct { unsigned char r, g, b, a; } Color;
+typedef struct { float x, y; } Vector2;
+#endif
 
 #include "../shared/jackal.h"
 #include "../shared/obstacle.h"
@@ -463,6 +469,7 @@ void c_step(DynaEval* env) {
     }
 }
 
+#ifndef DYNA_HEADLESS
 void c_render(DynaEval* env) {
     if (!env->window_ready) {
         InitWindow(WIDTH, HEIGHT, "PufferLib DynaEval");
@@ -540,3 +547,4 @@ void c_close(DynaEval* env) {
         env->window_ready = false;
     }
 }
+#endif  // !DYNA_HEADLESS

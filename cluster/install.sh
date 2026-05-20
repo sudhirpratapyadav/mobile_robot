@@ -53,6 +53,15 @@ if [ -f "$PATCH" ]; then
     fi
 fi
 
+# Symlink env source dirs into pufferlib/ocean/ (matches docker setup_container.sh).
+for env in dyna_train dyna_eval; do
+    src="$DYNA_BARN_DIR/$env"
+    dst="$PUFFER_ROOT/ocean/$env"
+    [ -e "$dst" ] && rm -rf "$dst"
+    ln -sfn "$src" "$dst"
+    echo "  linked $dst -> $src"
+done
+
 # Symlink configs into pufferlib/config so `pufferl train dyna_train` finds them.
 for f in dyna_train.ini dyna_eval.ini; do
     src="$DYNA_BARN_DIR/dyna_train/dyna_train.ini"
@@ -63,20 +72,12 @@ for f in dyna_train.ini dyna_eval.ini; do
     echo "  linked $dst -> $src"
 done
 
-# --- 2. raylib (only needed for dyna_eval link step) ---
-if [ ! -f "$RAYLIB_PREFIX/lib/libraylib.a" ]; then
-    echo "== building raylib $RAYLIB_VER =="
-    cd /tmp
-    rm -rf raylib-$RAYLIB_VER
-    curl -sL "https://github.com/raysan5/raylib/archive/refs/tags/$RAYLIB_VER.tar.gz" | tar xz
-    cd "raylib-$RAYLIB_VER/src"
-    make PLATFORM=PLATFORM_DESKTOP RAYLIB_LIBTYPE=STATIC \
-         RAYLIB_RELEASE_PATH="$RAYLIB_PREFIX/lib" -j8
-    mkdir -p "$RAYLIB_PREFIX/include" "$RAYLIB_PREFIX/lib"
-    cp libraylib.a "$RAYLIB_PREFIX/lib/"
-    cp raylib.h rlgl.h raymath.h "$RAYLIB_PREFIX/include/"
-    echo "raylib installed to $RAYLIB_PREFIX"
-fi
+# --- 2. raylib ---
+# PufferLib's build.sh downloads a prebuilt raylib-5.5_linux_amd64 binary
+# tarball on first run, so we don't need to build it locally.
+# dyna_eval.c is built with -DDYNA_HEADLESS on the cluster to skip the
+# interactive raylib code paths anyway (no X11 / no DISPLAY).
+echo "== raylib will be fetched by pufferlib build.sh; using DYNA_HEADLESS =="
 
 # --- 3. uv venv + PufferLib install ---
 cd "$PUFFER_ROOT"
@@ -90,13 +91,27 @@ echo "== installing pufferlib + deps =="
 # Use the editable install so our patches stay live.
 uv pip install -e . wandb pyarrow opencv-python-headless tyro pandas numpy
 
-# --- 4. Build dyna_train + dyna_eval ---
+# --- 4. Build dyna_train (standalone + _C.so via PufferLib) ---
 cd "$PUFFER_ROOT"
 echo "== building dyna_train (standalone + _C.so) =="
-RAYLIB_PREFIX="$RAYLIB_PREFIX" bash build.sh dyna_train --fast
-RAYLIB_PREFIX="$RAYLIB_PREFIX" bash build.sh dyna_train
-echo "== building dyna_eval =="
-RAYLIB_PREFIX="$RAYLIB_PREFIX" bash build.sh dyna_eval --fast
+bash build.sh dyna_train --fast
+bash build.sh dyna_train
+
+# --- 5. Build dyna_eval headless (no raylib needed for --traj mode) ---
+# We bypass pufferlib's build.sh for dyna_eval because the prebuilt raylib
+# binary links against X11/GLFW/Xcursor which dgx2 doesn't have. With
+# -DDYNA_HEADLESS the interactive raylib code paths are skipped and the
+# binary only supports --traj (trajectory-write) mode, which is what
+# run_eval_published.sh uses.
+echo "== building dyna_eval (headless, --traj only) =="
+cd "$PUFFER_ROOT"
+SRC="$DYNA_BARN_DIR"
+gcc -O2 -DNDEBUG -DDYNA_HEADLESS -DPLATFORM_DESKTOP \
+    -I"$SRC" -I"$SRC/shared" -I. -I./src -I./vendor \
+    "$DYNA_BARN_DIR/dyna_eval/dyna_eval.c" \
+    -o "$PUFFER_ROOT/dyna_eval" \
+    -lm -lpthread -fopenmp
+ls -la "$PUFFER_ROOT/dyna_eval"
 
 echo
 echo "== install complete =="
