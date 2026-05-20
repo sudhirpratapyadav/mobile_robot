@@ -52,7 +52,8 @@ cd "$PUFFER_ROOT"
 echo "=== train-dist (100 ep) ==="
 TD="$RUN_DIR/train_dist_render"
 mkdir -p "$TD"
-./dyna_train --traj "$TD/100ep.bin" --load "$CKPT" --episodes 100 --seed 42 "${EXTRA_FLAGS[@]}"
+./dyna_train --ini "$DYNA_BARN_DIR/dyna_train/dyna_train.ini" \
+    --traj "$TD/100ep.bin" --load "$CKPT" --episodes 100 --seed 42 "${EXTRA_FLAGS[@]}"
 python "$HOST/tools/bake_traj_parquet.py" "$TD/100ep.bin" "$TD/100ep.parquet"
 # Derive arena-half from --arena if passed; else fall back to renderer
 # default (12 = arena 24). Using python instead of `bc` (not in container).

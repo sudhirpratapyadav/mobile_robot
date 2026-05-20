@@ -96,7 +96,7 @@ fi
 . .venv/bin/activate
 echo "== installing pufferlib + deps =="
 # Use the editable install so our patches stay live.
-uv pip install -e . wandb pyarrow opencv-python-headless tyro pandas numpy
+uv pip install -e . wandb pyarrow opencv-python-headless tyro pandas numpy polars imageio imageio-ffmpeg
 
 # --- 4. Build dyna_train (standalone + _C.so via PufferLib) ---
 # Cluster nodes have gcc not clang. PufferLib's build.sh respects $CC for
