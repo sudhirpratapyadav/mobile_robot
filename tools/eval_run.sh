@@ -34,7 +34,11 @@ if [ -z "$RUN" ]; then
     exit 1
 fi
 
-HOST=/puffertank/host/dyna_barn
+# Source central path config (defaults match docker; cluster sets env vars).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/../cluster/env.sh"
+
+HOST="$DYNA_BARN_DIR"
 RUN_DIR="$HOST/runs/train/dyna_train/$RUN"
 CKPT="$RUN_DIR/$CKPT_BN"
 
@@ -43,8 +47,7 @@ if [ ! -f "$CKPT" ]; then
     exit 1
 fi
 
-cd /puffertank/pufferlib
-source /puffertank/venv/bin/activate
+cd "$PUFFER_ROOT"
 
 echo "=== train-dist (100 ep) ==="
 TD="$RUN_DIR/train_dist_render"

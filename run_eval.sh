@@ -15,8 +15,9 @@ SEED_BASE_E="${SEED_BASE_E:-1000}"
 SEED_BASE_M="${SEED_BASE_M:-2000}"
 SEED_BASE_H="${SEED_BASE_H:-3000}"
 
-HOST_ROOT=/puffertank/host/dyna_barn
-PUFFER_ROOT=/puffertank/pufferlib
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/cluster/env.sh"
+HOST_ROOT="$DYNA_BARN_DIR"
 
 if [ -z "$CKPT" ]; then
     echo "Usage: $0 <ckpt.bin> [N_TRIALS] [MAX_STEPS]" >&2
@@ -27,7 +28,6 @@ if [ ! -f "$CKPT" ]; then
     exit 1
 fi
 
-. "$PUFFER_ROOT/venv/bin/activate" 2>/dev/null || . /puffertank/venv/bin/activate
 cd "$PUFFER_ROOT"
 
 CKPT_NAME=$(basename "$CKPT" .bin)

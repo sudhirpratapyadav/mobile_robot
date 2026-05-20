@@ -27,8 +27,10 @@ if [ -z "$GPU" ] || [ -z "$HISTORY_LEN" ] || [ -z "$WANDB_GROUP" ]; then
     exit 1
 fi
 
-HOST=/puffertank/host/dyna_barn
-PUFFER=/puffertank/pufferlib
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/../cluster/env.sh"
+HOST="$DYNA_BARN_DIR"
+PUFFER="$PUFFER_ROOT"
 
 # Sync HISTORY_LEN in both env headers.
 sed -i "s|^#  define HISTORY_LEN .*$|#  define HISTORY_LEN ${HISTORY_LEN}|" \
@@ -36,7 +38,6 @@ sed -i "s|^#  define HISTORY_LEN .*$|#  define HISTORY_LEN ${HISTORY_LEN}|" \
     "$HOST/dyna_eval/dyna_eval.h"
 
 cd "$PUFFER"
-source /puffertank/venv/bin/activate
 
 echo "=== build (HISTORY_LEN=$HISTORY_LEN) ==="
 bash build.sh dyna_train --fast >/dev/null

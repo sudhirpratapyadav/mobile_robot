@@ -8,12 +8,12 @@
 
 set -e
 
-HOST_ROOT=/puffertank/host/dyna_barn
-PUFFER_ROOT=/puffertank/pufferlib
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/cluster/env.sh"
+HOST_ROOT="$DYNA_BARN_DIR"
 ENV_TRAIN=dyna_train
 ENV_EVAL=dyna_eval
 
-. /puffertank/venv/bin/activate
 cd "$PUFFER_ROOT"
 
 mkdir -p "$HOST_ROOT/runs/train" "$HOST_ROOT/runs/eval"

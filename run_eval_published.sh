@@ -16,8 +16,9 @@ CKPT="$1"
 N_TRIALS="${2:-10}"
 MAX_STEPS="${3:-600}"
 
-HOST_ROOT=/puffertank/host/dyna_barn
-PUFFER_ROOT=/puffertank/pufferlib
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/cluster/env.sh"
+HOST_ROOT="$DYNA_BARN_DIR"
 WORLDS_DIR="$HOST_ROOT/external/baked_worlds"
 CLASS_FILE="$HOST_ROOT/external/baked_worlds_classified.json"
 
@@ -35,7 +36,6 @@ if [ ! -f "$CLASS_FILE" ]; then
     exit 1
 fi
 
-. /puffertank/venv/bin/activate
 cd "$PUFFER_ROOT"
 
 CKPT_NAME=$(basename "$CKPT" .bin)

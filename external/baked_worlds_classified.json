@@ -1,0 +1,362 @@
+{
+  "0": {
+    "path": "external/baked_worlds/world_000.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.75,
+    "difficulty": "easy"
+  },
+  "1": {
+    "path": "external/baked_worlds/world_001.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.7436,
+    "difficulty": "easy"
+  },
+  "2": {
+    "path": "external/baked_worlds/world_002.bin",
+    "n_obstacles": 8,
+    "mean_speed": 0.6487,
+    "difficulty": "easy"
+  },
+  "3": {
+    "path": "external/baked_worlds/world_003.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.7795,
+    "difficulty": "easy"
+  },
+  "4": {
+    "path": "external/baked_worlds/world_004.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.7316,
+    "difficulty": "easy"
+  },
+  "5": {
+    "path": "external/baked_worlds/world_005.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.7611,
+    "difficulty": "easy"
+  },
+  "6": {
+    "path": "external/baked_worlds/world_006.bin",
+    "n_obstacles": 8,
+    "mean_speed": 0.7354,
+    "difficulty": "easy"
+  },
+  "7": {
+    "path": "external/baked_worlds/world_007.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.7021,
+    "difficulty": "easy"
+  },
+  "8": {
+    "path": "external/baked_worlds/world_008.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.6636,
+    "difficulty": "easy"
+  },
+  "9": {
+    "path": "external/baked_worlds/world_009.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.7757,
+    "difficulty": "easy"
+  },
+  "10": {
+    "path": "external/baked_worlds/world_010.bin",
+    "n_obstacles": 8,
+    "mean_speed": 0.8255,
+    "difficulty": "easy"
+  },
+  "11": {
+    "path": "external/baked_worlds/world_011.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.7349,
+    "difficulty": "easy"
+  },
+  "12": {
+    "path": "external/baked_worlds/world_012.bin",
+    "n_obstacles": 8,
+    "mean_speed": 0.6651,
+    "difficulty": "easy"
+  },
+  "13": {
+    "path": "external/baked_worlds/world_013.bin",
+    "n_obstacles": 8,
+    "mean_speed": 0.6843,
+    "difficulty": "easy"
+  },
+  "14": {
+    "path": "external/baked_worlds/world_014.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.6861,
+    "difficulty": "easy"
+  },
+  "15": {
+    "path": "external/baked_worlds/world_015.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.6381,
+    "difficulty": "easy"
+  },
+  "16": {
+    "path": "external/baked_worlds/world_016.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.6409,
+    "difficulty": "easy"
+  },
+  "17": {
+    "path": "external/baked_worlds/world_017.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.8696,
+    "difficulty": "easy"
+  },
+  "18": {
+    "path": "external/baked_worlds/world_018.bin",
+    "n_obstacles": 5,
+    "mean_speed": 0.7574,
+    "difficulty": "easy"
+  },
+  "19": {
+    "path": "external/baked_worlds/world_019.bin",
+    "n_obstacles": 7,
+    "mean_speed": 0.753,
+    "difficulty": "easy"
+  },
+  "20": {
+    "path": "external/baked_worlds/world_020.bin",
+    "n_obstacles": 6,
+    "mean_speed": 1.5454,
+    "difficulty": "medium"
+  },
+  "21": {
+    "path": "external/baked_worlds/world_021.bin",
+    "n_obstacles": 9,
+    "mean_speed": 1.5352,
+    "difficulty": "medium"
+  },
+  "22": {
+    "path": "external/baked_worlds/world_022.bin",
+    "n_obstacles": 7,
+    "mean_speed": 1.5497,
+    "difficulty": "medium"
+  },
+  "23": {
+    "path": "external/baked_worlds/world_023.bin",
+    "n_obstacles": 6,
+    "mean_speed": 1.4827,
+    "difficulty": "medium"
+  },
+  "24": {
+    "path": "external/baked_worlds/world_024.bin",
+    "n_obstacles": 7,
+    "mean_speed": 1.5559,
+    "difficulty": "medium"
+  },
+  "25": {
+    "path": "external/baked_worlds/world_025.bin",
+    "n_obstacles": 5,
+    "mean_speed": 1.5274,
+    "difficulty": "medium"
+  },
+  "26": {
+    "path": "external/baked_worlds/world_026.bin",
+    "n_obstacles": 6,
+    "mean_speed": 1.3987,
+    "difficulty": "medium"
+  },
+  "27": {
+    "path": "external/baked_worlds/world_027.bin",
+    "n_obstacles": 5,
+    "mean_speed": 1.4136,
+    "difficulty": "medium"
+  },
+  "28": {
+    "path": "external/baked_worlds/world_028.bin",
+    "n_obstacles": 8,
+    "mean_speed": 1.6465,
+    "difficulty": "medium"
+  },
+  "29": {
+    "path": "external/baked_worlds/world_029.bin",
+    "n_obstacles": 7,
+    "mean_speed": 1.3149,
+    "difficulty": "medium"
+  },
+  "30": {
+    "path": "external/baked_worlds/world_030.bin",
+    "n_obstacles": 15,
+    "mean_speed": 0.7645,
+    "difficulty": "medium"
+  },
+  "31": {
+    "path": "external/baked_worlds/world_031.bin",
+    "n_obstacles": 15,
+    "mean_speed": 0.702,
+    "difficulty": "medium"
+  },
+  "32": {
+    "path": "external/baked_worlds/world_032.bin",
+    "n_obstacles": 18,
+    "mean_speed": 0.7538,
+    "difficulty": "medium"
+  },
+  "33": {
+    "path": "external/baked_worlds/world_033.bin",
+    "n_obstacles": 14,
+    "mean_speed": 0.7111,
+    "difficulty": "medium"
+  },
+  "34": {
+    "path": "external/baked_worlds/world_034.bin",
+    "n_obstacles": 14,
+    "mean_speed": 0.7064,
+    "difficulty": "medium"
+  },
+  "35": {
+    "path": "external/baked_worlds/world_035.bin",
+    "n_obstacles": 10,
+    "mean_speed": 0.7512,
+    "difficulty": "medium"
+  },
+  "36": {
+    "path": "external/baked_worlds/world_036.bin",
+    "n_obstacles": 18,
+    "mean_speed": 0.7524,
+    "difficulty": "medium"
+  },
+  "37": {
+    "path": "external/baked_worlds/world_037.bin",
+    "n_obstacles": 15,
+    "mean_speed": 0.7149,
+    "difficulty": "medium"
+  },
+  "38": {
+    "path": "external/baked_worlds/world_038.bin",
+    "n_obstacles": 14,
+    "mean_speed": 0.7159,
+    "difficulty": "medium"
+  },
+  "39": {
+    "path": "external/baked_worlds/world_039.bin",
+    "n_obstacles": 16,
+    "mean_speed": 0.779,
+    "difficulty": "medium"
+  },
+  "40": {
+    "path": "external/baked_worlds/world_040.bin",
+    "n_obstacles": 13,
+    "mean_speed": 1.4896,
+    "difficulty": "hard"
+  },
+  "41": {
+    "path": "external/baked_worlds/world_041.bin",
+    "n_obstacles": 17,
+    "mean_speed": 1.5007,
+    "difficulty": "hard"
+  },
+  "42": {
+    "path": "external/baked_worlds/world_042.bin",
+    "n_obstacles": 15,
+    "mean_speed": 1.5385,
+    "difficulty": "hard"
+  },
+  "43": {
+    "path": "external/baked_worlds/world_043.bin",
+    "n_obstacles": 13,
+    "mean_speed": 1.4084,
+    "difficulty": "hard"
+  },
+  "44": {
+    "path": "external/baked_worlds/world_044.bin",
+    "n_obstacles": 19,
+    "mean_speed": 1.5323,
+    "difficulty": "hard"
+  },
+  "45": {
+    "path": "external/baked_worlds/world_045.bin",
+    "n_obstacles": 13,
+    "mean_speed": 1.3856,
+    "difficulty": "hard"
+  },
+  "46": {
+    "path": "external/baked_worlds/world_046.bin",
+    "n_obstacles": 19,
+    "mean_speed": 1.4707,
+    "difficulty": "hard"
+  },
+  "47": {
+    "path": "external/baked_worlds/world_047.bin",
+    "n_obstacles": 18,
+    "mean_speed": 1.3926,
+    "difficulty": "hard"
+  },
+  "48": {
+    "path": "external/baked_worlds/world_048.bin",
+    "n_obstacles": 16,
+    "mean_speed": 1.6058,
+    "difficulty": "hard"
+  },
+  "49": {
+    "path": "external/baked_worlds/world_049.bin",
+    "n_obstacles": 15,
+    "mean_speed": 1.4116,
+    "difficulty": "hard"
+  },
+  "50": {
+    "path": "external/baked_worlds/world_050.bin",
+    "n_obstacles": 16,
+    "mean_speed": 1.5107,
+    "difficulty": "hard"
+  },
+  "51": {
+    "path": "external/baked_worlds/world_051.bin",
+    "n_obstacles": 12,
+    "mean_speed": 1.3662,
+    "difficulty": "hard"
+  },
+  "52": {
+    "path": "external/baked_worlds/world_052.bin",
+    "n_obstacles": 12,
+    "mean_speed": 1.4821,
+    "difficulty": "hard"
+  },
+  "53": {
+    "path": "external/baked_worlds/world_053.bin",
+    "n_obstacles": 11,
+    "mean_speed": 1.5509,
+    "difficulty": "hard"
+  },
+  "54": {
+    "path": "external/baked_worlds/world_054.bin",
+    "n_obstacles": 13,
+    "mean_speed": 1.5215,
+    "difficulty": "hard"
+  },
+  "55": {
+    "path": "external/baked_worlds/world_055.bin",
+    "n_obstacles": 18,
+    "mean_speed": 1.4995,
+    "difficulty": "hard"
+  },
+  "56": {
+    "path": "external/baked_worlds/world_056.bin",
+    "n_obstacles": 12,
+    "mean_speed": 1.4971,
+    "difficulty": "hard"
+  },
+  "57": {
+    "path": "external/baked_worlds/world_057.bin",
+    "n_obstacles": 15,
+    "mean_speed": 1.3907,
+    "difficulty": "hard"
+  },
+  "58": {
+    "path": "external/baked_worlds/world_058.bin",
+    "n_obstacles": 17,
+    "mean_speed": 1.417,
+    "difficulty": "hard"
+  },
+  "59": {
+    "path": "external/baked_worlds/world_059.bin",
+    "n_obstacles": 14,
+    "mean_speed": 1.4706,
+    "difficulty": "hard"
+  }
+}
