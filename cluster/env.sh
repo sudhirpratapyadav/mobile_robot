@@ -40,3 +40,15 @@ if [ -z "$VIRTUAL_ENV" ] && [ -f "$VENV_DIR/bin/activate" ]; then
     # shellcheck disable=SC1090
     . "$VENV_DIR/bin/activate"
 fi
+
+# Make nvidia-{nccl,cudnn,cublas,cusolver,curand,...}-cu12 wheel .so files
+# findable at runtime by pufferlib's _C.so import.
+if [ -d "$VENV_DIR/lib/python3.12/site-packages/nvidia" ]; then
+    for d in "$VENV_DIR/lib/python3.12/site-packages/nvidia"/*/lib; do
+        [ -d "$d" ] || continue
+        case ":$LD_LIBRARY_PATH:" in
+            *:"$d":*) ;;
+            *) export LD_LIBRARY_PATH="$d:${LD_LIBRARY_PATH:-}" ;;
+        esac
+    done
+fi
