@@ -120,6 +120,7 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
         -e 's/-Werror=incompatible-pointer-types//g' \
         -e 's/STANDALONE_LDFLAGS=(-lGL)/STANDALONE_LDFLAGS=(-lGL -ldl -lrt)/' \
         -e 's|NVCC="ccache \(.*\)"|NVCC="\1"|' \
+        -e 's/OMP_LIB=-lomp5/OMP_LIB=-lomp/' \
         build.sh
 
     # Inject NCCL_IFLAG / NCCL_LFLAG (build.sh assumed system-installed nccl)
@@ -155,6 +156,23 @@ echo "== building dyna_train (standalone + _C.so) with CC=$CC =="
 # gcc-12.2-built ones.
 rm -rf "$PUFFER_ROOT/build" "$PUFFER_ROOT/dyna_train" "$PUFFER_ROOT/dyna_eval"
 rm -f "$PUFFER_ROOT/pufferlib/_C.cpython"-*.so
+
+# nvidia-{nccl,cudnn}-cu12 wheels only ship versioned .so (e.g. libnccl.so.2,
+# libcudnn.so.9). Linker -lnccl needs libnccl.so. Create unversioned symlinks.
+for pkg in nccl cudnn; do
+    libdir="$PUFFER_ROOT/.venv/lib/python3.12/site-packages/nvidia/$pkg/lib"
+    if [ -d "$libdir" ]; then
+        for so in "$libdir"/lib*.so.*; do
+            [ -f "$so" ] || continue
+            unversioned="$(echo "$so" | sed 's|\.so\..*$|.so|')"
+            [ -e "$unversioned" ] || ln -sf "$(basename "$so")" "$unversioned"
+        done
+    fi
+done
+
+# Also make those lib dirs visible to ld at runtime.
+export LD_LIBRARY_PATH="$PUFFER_ROOT/.venv/lib/python3.12/site-packages/nvidia/nccl/lib:$PUFFER_ROOT/.venv/lib/python3.12/site-packages/nvidia/cudnn/lib:${LD_LIBRARY_PATH:-}"
+
 bash build.sh dyna_train --fast
 bash build.sh dyna_train
 
