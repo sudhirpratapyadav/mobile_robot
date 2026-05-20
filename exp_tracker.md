@@ -2022,3 +2022,26 @@ under rotation.
 **Followup:** If pursuing rotation-invariance, add training-time random
 rotation to the env so the policy sees all 4 orientations during PPO.
 
+
+---
+
+### Sweep 2 (2026-05-20): geometry-match (Lever E) + Wait α=0.5 — all 4 regressed
+
+Added Lever E: per-episode random open-side in dyna_train (matches
+eval's 3-walled geometry). Tested at both training arena sizes.
+Plus Wait α=0.5 mid-dose.
+
+| Variant            | run_id   | rot=0  | rot=90 |
+|--------------------|----------|-------:|-------:|
+| king mndgrcil      | mndgrcil | 75.0   | 55.0   |
+| 3-walled a40 (E1)  | o36ueikj | 43.3   | 34.8   |
+| 3-walled a20 (E2)  | kf6srvi2 |  0.0   |  0.0   |
+| closed a20  (G)    | ijawaxyz |   —    |  0.0   |
+| Wait α=0.5 (F)     | hr3ilkux |   —    | 26.3   |
+
+**Findings:** 3-walled training HURTS (−20pp rot=90 at a40, full
+collapse at a20). Wait α dose-response non-monotonic
+(0.3=9.7%, 0.5=26.3%, 1.0=42.3%).
+
+Lever E is dead. King mndgrcil's recipe is in an unusually fragile
+attractor — every axis touched 2026-05-19/20 regresses paper rot=90.
