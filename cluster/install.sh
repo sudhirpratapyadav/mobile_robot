@@ -92,8 +92,28 @@ echo "== installing pufferlib + deps =="
 uv pip install -e . wandb pyarrow opencv-python-headless tyro pandas numpy
 
 # --- 4. Build dyna_train (standalone + _C.so via PufferLib) ---
+# Cluster nodes have gcc not clang. PufferLib's build.sh respects $CC for
+# the compiler, but uses clang-specific flags (-ferror-limit, the various
+# -Wno-error=*-discards-qualifiers) in CLANG_WARN. Patch them out
+# idempotently for the cluster path; the resulting build still warns
+# loudly but doesn't fail.
+export CC=gcc
 cd "$PUFFER_ROOT"
-echo "== building dyna_train (standalone + _C.so) =="
+
+if ! grep -q "# CLUSTER PATCHED" build.sh; then
+    echo "== patching build.sh CLANG_WARN for gcc compatibility =="
+    # Strip clang-only flags from CLANG_WARN so gcc doesn't choke.
+    # Then mark the file so we only do this once.
+    sed -i.bak \
+        -e 's/-ferror-limit=3//g' \
+        -e 's/-Wno-error=incompatible-pointer-types-discards-qualifiers//g' \
+        -e 's/-Wno-incompatible-pointer-types-discards-qualifiers//g' \
+        -e 's/-Wno-deprecated-declarations//g' \
+        build.sh
+    echo "# CLUSTER PATCHED" >> build.sh
+fi
+
+echo "== building dyna_train (standalone + _C.so) with CC=$CC =="
 bash build.sh dyna_train --fast
 bash build.sh dyna_train
 
