@@ -85,6 +85,8 @@ static DynaTrain make_env(unsigned int seed, const char* ini_path) {
         .gamma_fwd          = G_F("gamma_fwd",          0.0f),
         .alpha_wait         = G_F("alpha_wait",         0.0f),
         .sigma_v            = G_F("sigma_v",            0.5f),
+        .open_side_mode     = G_I("open_side_mode",     0),
+        .cur_open_side      = -1,
         .terminate_on_goal      = G_I("terminate_on_goal",      0),
         .terminate_on_collision = G_I("terminate_on_collision", 0),
         .mw_poly            = G_I("mw_poly",            1),
@@ -305,6 +307,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--gamma-fwd") && i+1 < argc)        env.gamma_fwd = atof(argv[++i]);
         else if (!strcmp(argv[i], "--alpha-wait") && i+1 < argc)       env.alpha_wait = atof(argv[++i]);
         else if (!strcmp(argv[i], "--sigma-v") && i+1 < argc)          env.sigma_v = atof(argv[++i]);
+        else if (!strcmp(argv[i], "--open-side-mode") && i+1 < argc)   env.open_side_mode = atoi(argv[++i]);
     }
 
     if (traj) {

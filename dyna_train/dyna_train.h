@@ -210,6 +210,17 @@ typedef struct {
     //    α_wait = 0 disables.
     float alpha_wait;       // strength (default 0.0)
     float sigma_v;          // speed bandwidth (default 0.5 m/s)
+    // -- Lever E: per-episode open-side randomization to match eval
+    //    geometry. open_side_mode controls which side of the arena
+    //    (if any) is opened (no wall) each episode:
+    //      0 = closed box on all 4 sides (default, baseline behaviour)
+    //      1 = random open side per episode (0/90/180/270° CCW around +x)
+    //    When the side is opened, only 3 walls cause wall_collision; the
+    //    open side acts as a "mouth" the robot can drive through (and
+    //    then it's outside the arena, episode keeps running).
+    //    cur_open_side ∈ {-1: closed, 0/1/2/3: +x/+y/-x/-y}.
+    int   open_side_mode;
+    int   cur_open_side;    // resolved by c_reset
     // No-termination mode: when terminate_on_goal=0 the goal touch does NOT
     // end the episode (robot can dwell), and when terminate_on_collision=0
     // collisions do NOT end the episode (robot keeps going through).
@@ -287,7 +298,17 @@ static inline bool obstacle_collision(const DynaTrain* env) {
 
 static inline bool wall_collision(const DynaTrain* env) {
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    return fabsf(env->robot.x) > half || fabsf(env->robot.y) > half;
+    int side = env->cur_open_side;   // -1 closed, else 0/1/2/3
+    // Walls present: skip the one matching cur_open_side.
+    //   side 0 (+x): skip robot.x > +half
+    //   side 1 (+y): skip robot.y > +half
+    //   side 2 (-x): skip robot.x < -half
+    //   side 3 (-y): skip robot.y < -half
+    if (side != 0 && env->robot.x >  half) return true;
+    if (side != 1 && env->robot.y >  half) return true;
+    if (side != 2 && env->robot.x < -half) return true;
+    if (side != 3 && env->robot.y < -half) return true;
+    return false;
 }
 
 static inline float closest_obstacle_dist(const DynaTrain* env) {
@@ -502,6 +523,12 @@ void c_reset(DynaTrain* env) {
         }
     }
 
+    // Resolve cur_open_side from open_side_mode (called per episode).
+    if (env->open_side_mode == 1) {
+        env->cur_open_side = (int)(rand_r(&env->rng) % 4);
+    } else {
+        env->cur_open_side = -1;  // closed box (default, baseline)
+    }
     update_obstacles(env);
     // Initialise prev_obs to current so the first c_step sees v_obs = 0.
     for (int i = 0; i < env->num_obstacles; i++) {
@@ -552,10 +579,16 @@ void c_step(DynaTrain* env) {
 
     jackal_step(&env->robot, v_cmd, w_cmd, env->dt);
 
-    // Clamp robot to the inner-arena box (footprint-aware).
+    // Clamp robot to the inner-arena box (footprint-aware). Skip the
+    // open side if cur_open_side ∈ {0/1/2/3} (so the robot can exit
+    // through it without being clamped; wall_collision will not
+    // trigger either, so the episode continues outside the arena).
     float half = 0.5f * env->arena_size - JACKAL_RADIUS;
-    env->robot.x = clampf(env->robot.x, -half, half);
-    env->robot.y = clampf(env->robot.y, -half, half);
+    int side = env->cur_open_side;
+    if (side != 2 && env->robot.x < -half) env->robot.x = -half;
+    if (side != 0 && env->robot.x >  half) env->robot.x =  half;
+    if (side != 3 && env->robot.y < -half) env->robot.y = -half;
+    if (side != 1 && env->robot.y >  half) env->robot.y =  half;
 
     update_obstacles(env);
 
