@@ -2074,3 +2074,34 @@ re-emerge from a fresh cluster training run; carry the ckpt over.
 
 **Cluster speedup:** ~230K SPS on A100 vs ~95K SPS on local A6000
 (~2.4× faster). 500M-step training in ~36 min.
+
+---
+
+### Sweep 3 (2026-05-20): PPO hparams + fixed-open-side ablation
+
+| Variant            | run_id    | rot=0  | rot=90 | TD verdict |
+|--------------------|-----------|-------:|-------:|------------|
+| king mndgrcil      | mndgrcil  | 75.0   | 55.0   | (prior)    |
+| ent_coef=0.005     | fmehxsbi  |  —     |  0.8   | 16 clean / 39 dirty / 41 coll / 4 to |
+| ent_coef=0.02      | wqff0awh  |  —     | 34.3   | 37 clean / 58 dirty / 4 coll / 1 to |
+| **open_side=2 fixed +x** | **i9ckum4e** | **64.2** | **52.7** | 47 clean / 52 dirty / 1 coll |
+| lr=1e-4            | m913znp4  |  —     |  5.8   | 6 clean / 8 dirty / 82 coll / 4 to |
+
+**Findings:**
+- ent_coef sweep both directions: dead. 0.005 catastrophic (0.8 %), 0.02
+  partial regression (34.3 %).
+- lr=1e-4 catastrophic — undertrained at 500 M.
+- **Fixed-open-side training (i9ckum4e) is the closest non-king variant
+  yet** at rot=90: 52.7 % (king 55.0 %, only −2.3 pp). And it gets 64.2 %
+  at rot=0 (vs king 75.0, −10.8 pp). Interestingly, **random** open-side
+  training (sweep 2 `o36ueikj`) tanked to 34.8 % at rot=90 — fixed +x
+  worked far better than random-side, suggesting the policy benefits
+  from learning *one* open-mouth orientation rather than all 4.
+
+This is the first variant in two days of sweeps that didn't crash
+hard relative to king. Worth a follow-up sweep if we revisit:
+fixed-open-side at other rotation angles, or fixed-open-side combined
+with king's full recipe at longer training.
+
+**Conclusion:** All other axes (entropy, LR) are dead. fixed-open-side
+is a marginal-helping axis worth keeping in the toolkit.

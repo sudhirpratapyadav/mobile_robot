@@ -650,3 +650,89 @@ but with more even per-difficulty performance.
 * `exp_tracker.md` got truncated to 0 bytes by ENOSPC during a write;
   restored from git (commits `5b15f5a` and `18acd94`).
 
+
+# 2026-05-19 / 2026-05-20 — three more sweep days, cluster migration
+
+## Day 3 (2026-05-19)
+
+Filled in the speed sweep around the new king `mndgrcil` (paper rot=0
+75 %). Confirmed speed=5.0 is a **narrow asymmetric peak**: speed=4.5 →
+32.7 % paper, speed=5.5 → 63.2 %, speed=6.0 → 28.7 % (slow side
+collapses *harder* than the fast side, which is counter-intuitive).
+Arena sweep around king's a40: a35 → 22 %, a45 → 22.7 %. The a40 win
+is a singular point, not a smooth optimum.
+
+Added paper-eval **rotation** flag (`--rotation {0,90,180,270}` in
+`dyna_eval`). The king at rot=90 (open wall on +y instead of +x)
+drops 20 pp to **55.0 %** — the policy is not rotation-invariant.
+From this point on `tools/eval_run.sh` defaults to `ROTATION=90`.
+
+Pushed forward on the "robot never stops near obstacles" observation
+the user noticed in webms. Implemented and swept **Lever A**:
+goal-attraction mute weighted by forward-cone × distance density.
+4-cell sweep at σ_d=1.0, κ∈{0,2} × λ∈{1,2} — all 4 regressed
+(best 44.8 %, worst 1.7 %). Diagnosis: muting the goal pull
+*silences* the only positive signal near obstacles, leaving the
+policy with nothing to chase — it just collides or times out instead
+of stopping.
+
+## Day 4 (2026-05-20)
+
+Did ~14 trainings across three more "fix the never-stops" sweeps,
+all dead:
+
+**Reward sweeps (Lever B/C/D, 6 cells):**
+- B = TTC-style penalty `exp(−ttc/τ)` per obstacle. α∈{0.5, 2.0} —
+  both 0 % paper. Penalty dominated the reward landscape; policy
+  never learned to navigate.
+- C = forward-cone β-amplification (additive). γ∈{1.0, 3.0} —
+  29.5 %/26.2 %. Marginal scaling but still well below king.
+- D = stationarity bonus `α·exp(−d_min²/σ²)·exp(−|v|²/σ_v²)`.
+  α∈{0.3, 1.0} — 9.7 %/42.3 %. Non-monotonic dose-response;
+  high-α produces a "safe-but-stuck" policy.
+
+**Geometry sweeps (Lever E, 3 cells):**
+- random open side per episode @ a40 — 34.8 %
+- random open side @ a20 — 0 %
+- closed box @ a20 — 0 %
+- fixed +x open side (sweep 3, `i9ckum4e`) — **52.7 %** (closest non-
+  king variant in two days).
+
+**PPO hparams (sweep 3, 4 cells):**
+- ent_coef=0.005 → 0.8 %, ent_coef=0.02 → 34.3 %, lr=1e-4 → 5.8 %.
+- None help.
+
+**Pattern across 30+ runs:** king `mndgrcil`'s reward+geometry recipe
+is in an unusually narrow attractor. Every reward-shape edit and
+every PPO-hyperparam edit at the same recipe regresses paper rot=90.
+The user's "robot doesn't stop" observation is real (parquet analysis
+showed obstacle speeds in eval cap at 1.95 m/s while training had
+them up to 5 m/s — half of training experience is in a speed regime
+that doesn't exist in eval) but is not fixable by reward shaping at
+the strengths swept.
+
+**Cluster migration (2026-05-20 evening):**
+Code pushed to GitHub (`sudhirpratapyadav/mobile_robot`) and cloned
+to iHub SLURM cluster. Built dyna_train + dyna_eval + pufferlib._C.so
+on dgx2 (A100-80GB) via `cluster/install.sh`. Compile chain (in
+order discovered): gcc 8.5 too old for C++17 designated init →
+loaded gnu12 module (gcc 12.2); clang-only flags + ccache + libomp5
+needed sed-patches; raylib needs -ldl -lrt for static link; nccl
+needs `-I` from nvidia-nccl-cu12 wheel; .so files versioned only,
+needed unversioned symlinks; `dyna_eval` built `-DDYNA_HEADLESS` so
+no X11 needed.
+
+**Smoke test:** mndgrcil ckpt re-evaluated on dgx2 → **55.2 %**
+rot=90 (matches local docker 55.0 % within 0.2 pp). King reproduces.
+Fresh cluster training of king config (`jo4ccvo4`) lands in a
+different basin (26.5 % paper) — PufferLib's CUDA-native backend
+ignores `--train.seed` so two runs of the same config can't be
+reproduced byte-for-byte. Mitigation: carry ckpts across hosts;
+don't expect re-training to recover the king.
+
+**Speedup:** 230 K SPS on A100 vs 95 K SPS on local A6000 (≈ 2.4×).
+500 M training in 36 min vs ~90 min locally.
+
+**Status at handoff:** local docker idle (sweep 3 ended), cluster
+ready to launch new experiments. No new sweeps in flight per user
+instruction.

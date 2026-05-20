@@ -32,20 +32,37 @@ shape so a single trained policy works in both.
 - **Episode termination** (train): full 80 s (truncation only).
 - **Episode termination** (paper eval): on goal, collision, or timeout.
 
-## Headline result (2026-05-17)
+## Headline result (2026-05-20)
 
-Single policy `e7sadb3v` (500M steps, beta=10) trained on procedural
-worlds, evaluated on the 60 published DynaBARN worlds (600 trials):
+Best policy `mndgrcil` (500 M steps, β=10, arena=40, obs 8–30, obstacle
+speed 0.5–5.0 m/s), trained on procedural worlds, evaluated on the 60
+published DynaBARN worlds (600 trials).
 
-| Difficulty | Success | Collision | Timeout |
-|---|---|---|---|
-| Easy | 55.5 % | 35.5 % | 9.0 % |
-| Medium | 44.5 % | 50.0 % | 5.5 % |
-| Hard | 34.0 % | 61.5 % | 4.5 % |
-| **Overall** | **44.7 %** | 49.0 % | 6.3 % |
+| Difficulty | rot=0 (original paper) | rot=90 (rotated, harder) |
+|---|---|---|
+| Easy   | 85.0 % | 75.0 % |
+| Medium | 78.5 % | 62.0 % |
+| Hard   | 61.5 % | 28.0 % |
+| **Overall** | **75.0 %** | **55.0 %** |
 
-Reported SOTA (from `docs/dyna_barn.md`): LfH-CP 30.83 %, E2E 18.5 %.
-Our result beats reported LfH-CP by **+13.9 pp**.
+Reported SOTA (from `docs/dyna_barn.md`): LfH-CP 30.83 %, E2E 18.5 %
+(both at rot=0). Our king beats LfH-CP by **+44 pp** at rot=0 and
+**+24 pp** at the harder rot=90 eval (where the room is rotated 90 °
+CCW so the open side is on +y instead of +x — a generality stress test
+the paper does not run).
+
+Per-host reproducibility (same `mndgrcil` ckpt, rot=90):
+
+| host | hardware | Paper rot=90 |
+|---|---|---|
+| docker (local) | RTX A6000 | 55.0 % |
+| iHub dgx2 cluster | A100-80GB | 55.2 % |
+
+See `exp_tracker.md` for the path from `e7sadb3v` (44.7 %) to
+`mndgrcil` (75 %) — the breakthrough lever was widening obstacle
+speeds to 0.5–5.0 m/s in training. Subsequent sweeps over reward
+shape, geometry, PPO hyperparameters, and architecture (~30 runs)
+have not improved on the king at rot=90.
 
 ## Pipelines
 
@@ -61,7 +78,20 @@ Our result beats reported LfH-CP by **+13.9 pp**.
   via `ProcessPoolExecutor` with spawn-context (24-worker default).
 - **Paper eval**: `bash run_eval_published.sh <ckpt.bin> 10 600` runs
   10 trials × 60 worlds, writes `summary.json` + per-world parquets +
-  optional WebMs.
+  optional WebMs. The convenience wrapper
+  `bash tools/eval_run.sh <wandb_run_id>` does train-dist render +
+  paper-eval + webms in one shot; defaults to `ROTATION=90` (the
+  rotated eval). Set `ROTATION=0` for the original paper geometry.
+
+## Where things live
+
+- **Local (docker)** — paths default to `/puffertank/host/dyna_barn`
+  and `/puffertank/pufferlib`. No setup needed; container is preconfigured.
+- **iHub SLURM cluster** — see `cluster/README.md` for the holder +
+  `srun` workflow. One-shot `cluster/install.sh` clones PufferLib at
+  the pinned commit, applies our 2-file patch, builds raylib-headless,
+  creates a uv venv, and compiles `dyna_train` / `dyna_eval`. Same W&B
+  project, same code, same king reproduces to within 0.2 pp.
 
 ## Background
 
