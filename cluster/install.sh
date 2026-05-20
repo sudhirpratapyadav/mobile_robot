@@ -27,6 +27,13 @@ RAYLIB_VER="5.0"
 # --- 0. Toolchain check ---
 echo "== toolchain =="
 export PATH="/usr/local/cuda/bin:$PATH"
+# System gcc is 8.5 which doesn't accept C99-style designated initializers
+# in C++17 mode (pufferlib's tensor init code). Load gcc-12.2 from the
+# OHPC module system.
+if [ -f /etc/profile.d/lmod.sh ]; then
+    . /etc/profile.d/lmod.sh
+    module load gnu12 2>/dev/null || true
+fi
 which gcc nvcc uv >/dev/null || { echo "missing gcc/nvcc/uv on PATH"; exit 1; }
 gcc --version | head -1
 nvcc --version | tail -2
@@ -144,6 +151,10 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
 fi
 
 echo "== building dyna_train (standalone + _C.so) with CC=$CC =="
+# Clear any stale build artifacts so we don't link gcc-8.5 objects with
+# gcc-12.2-built ones.
+rm -rf "$PUFFER_ROOT/build" "$PUFFER_ROOT/dyna_train" "$PUFFER_ROOT/dyna_eval"
+rm -f "$PUFFER_ROOT/pufferlib/_C.cpython"-*.so
 bash build.sh dyna_train --fast
 bash build.sh dyna_train
 
