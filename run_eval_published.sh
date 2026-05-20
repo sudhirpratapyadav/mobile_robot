@@ -51,7 +51,13 @@ echo "Max steps/ep:   $MAX_STEPS"
 echo "Output:         $OUT_DIR"
 echo
 
-bash build.sh dyna_eval --fast >/dev/null
+# Skip rebuild if dyna_eval already present (cluster builds it via
+# cluster/install.sh with -DDYNA_HEADLESS; pufferlib build.sh would
+# pull in raylib X11 which isn't available there). Use FORCE_REBUILD=1
+# to override.
+if [ "${FORCE_REBUILD:-0}" = "1" ] || [ ! -x ./dyna_eval ]; then
+    bash build.sh dyna_eval --fast >/dev/null
+fi
 
 # Iterate worlds 000–059
 SEED_BASE=10000
