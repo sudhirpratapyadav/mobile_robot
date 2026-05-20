@@ -102,8 +102,8 @@ cd "$PUFFER_ROOT"
 
 if ! grep -q "# CLUSTER PATCHED" build.sh; then
     echo "== patching build.sh CLANG_WARN for gcc compatibility =="
-    # Strip clang-only flags from CLANG_WARN so gcc doesn't choke.
-    # Then mark the file so we only do this once.
+    # Strip clang-only flags + add -ldl/-lrt for raylib's runtime
+    # dynamic loading.
     sed -i.bak \
         -e 's/-ferror-limit=3//g' \
         -e 's/-Wno-error=incompatible-pointer-types-discards-qualifiers//g' \
@@ -111,6 +111,7 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
         -e 's/-Wno-deprecated-declarations//g' \
         -e 's/-Wno-error=array-parameter//g' \
         -e 's/-Werror=incompatible-pointer-types//g' \
+        -e 's/STANDALONE_LDFLAGS=(-lGL)/STANDALONE_LDFLAGS=(-lGL -ldl -lrt)/' \
         build.sh
     echo "# CLUSTER PATCHED" >> build.sh
 fi
