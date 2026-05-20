@@ -524,10 +524,15 @@ void c_reset(DynaTrain* env) {
     }
 
     // Resolve cur_open_side from open_side_mode (called per episode).
+    //   0 = closed box (default)
+    //   1 = random open side per episode
+    //   2 = fixed open +x side (matches rot=0 eval geometry)
     if (env->open_side_mode == 1) {
         env->cur_open_side = (int)(rand_r(&env->rng) % 4);
+    } else if (env->open_side_mode == 2) {
+        env->cur_open_side = 0;  // +x open, matches eval rot=0
     } else {
-        env->cur_open_side = -1;  // closed box (default, baseline)
+        env->cur_open_side = -1; // closed box
     }
     update_obstacles(env);
     // Initialise prev_obs to current so the first c_step sees v_obs = 0.
