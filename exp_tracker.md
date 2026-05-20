@@ -2045,3 +2045,32 @@ collapse at a20). Wait α dose-response non-monotonic
 
 Lever E is dead. King mndgrcil's recipe is in an unusually fragile
 attractor — every axis touched 2026-05-19/20 regresses paper rot=90.
+
+---
+
+### Cluster migration (2026-05-20)
+
+Code moved to iHub SLURM cluster (dgx2, 8× A100 80GB). Repo at
+`~/sudhir/mobile_robot/dyna_barn` + `~/sudhir/mobile_robot/pufferlib`,
+pushed to `github.com:sudhirpratapyadav/mobile_robot.git`.
+
+**Smoke test (king ckpt on both hosts, same rot=90 paper-eval):**
+
+| host                | hardware    | Paper rot=90 | E    | M    | H    |
+|---------------------|-------------|-------------:|-----:|-----:|-----:|
+| docker (local)      | RTX A6000   | 55.0         | 75.0 | 62.0 | 28.0 |
+| cluster (dgx2)      | A100-80GB   | **55.2**     | 74.0 | 63.0 | 28.5 |
+
+**→ Same ckpt produces ~identical paper-eval across hosts.**
+Eval pipeline is portable.
+
+**Training reproducibility caveat:** retraining the king from scratch
+on the cluster (run `jo4ccvo4`) gave 26.5% paper-eval despite an
+identical env config and similar wandb training signature
+(clean=0.22 cluster vs 0.22–0.25 local). PufferLib's CUDA-native
+backend ignores `--train.seed` so two runs of the "same" config land
+in different attractor basins. Don't expect the king number to
+re-emerge from a fresh cluster training run; carry the ckpt over.
+
+**Cluster speedup:** ~230K SPS on A100 vs ~95K SPS on local A6000
+(~2.4× faster). 500M-step training in ~36 min.
