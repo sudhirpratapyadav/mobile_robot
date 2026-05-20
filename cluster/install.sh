@@ -112,6 +112,7 @@ if ! grep -q "# CLUSTER PATCHED" build.sh; then
         -e 's/-Wno-error=array-parameter//g' \
         -e 's/-Werror=incompatible-pointer-types//g' \
         -e 's/STANDALONE_LDFLAGS=(-lGL)/STANDALONE_LDFLAGS=(-lGL -ldl -lrt)/' \
+        -e 's|NVCC="ccache \(.*\)"|NVCC="\1"|' \
         build.sh
     echo "# CLUSTER PATCHED" >> build.sh
 fi
