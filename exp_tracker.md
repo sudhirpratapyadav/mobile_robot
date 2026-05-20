@@ -1789,6 +1789,77 @@ amplified forward-cone β-repulsion).
 
 ---
 
+### Levers B / C / D sweep (2026-05-20) — all 6 cells regressed
+
+Built on top of Lever A's plumbing. Three additive reward terms,
+each gated by its own coefficient (0=OFF, baseline=king).
+
+- **Lever B (TTC penalty):** `r -= α_ttc · Σᵢ exp(−ttc_i/τ)` for
+  converging pairs. Requires prev-step obstacle positions for v_obs.
+- **Lever C (forward-cone β amp):** closest-obstacle β-repulsion
+  scaled by `(1 + γ_fwd · cone(φ))`. Goal pull untouched.
+- **Lever D (stationarity bonus):** `r += α_wait · exp(−d_min²/σ_o²) ·
+  exp(−|v|²/σ_v²)`. Positive only when close-AND-slow.
+
+**6-cell sweep on king recipe (paper rot=90):**
+
+| Lever | Settings              | run_id    | Paper | E    | M    | H    | Δ     | TD verdict |
+|-------|-----------------------|-----------|------:|-----:|-----:|-----:|------:|------------|
+| —     | king (no extra)       | mndgrcil  | 55.0  | 75.0 | 62.0 | 28.0 |  0    | —          |
+| B     | TTC α=0.5, τ=1        | x7bqvn3i  |  0.0  |  0.0 |  0.0 |  0.0 | −55.0 | 99 coll /1 to |
+| B     | TTC α=2.0, τ=1        | cm1lyi25  |  0.0  |  0.0 |  0.0 |  0.0 | −55.0 | 98 coll       |
+| C     | FwdAmp γ=1, κ=2       | qfgzzmpe  | 26.2  | 39.0 | 34.5 |  5.0 | −28.8 | 55 dirty/42 clean |
+| C     | FwdAmp γ=3, κ=2       | vv9qe5th  | 29.5  | 43.0 | 29.5 | 16.0 | −25.5 | 55 dirty/43 clean |
+| D     | Wait α=0.3            | 02ls8vpq  |  9.7  | 13.0 | 15.5 |  0.5 | −45.3 | 45 dirty/52 clean |
+| D     | **Wait α=1.0**        | nva4wjyz  | 42.3  | 55.5 | 51.0 | 20.5 | −12.7 | 52 dirty/48 clean, 0 coll, 0 to |
+
+**Findings:**
+
+1. **TTC (Lever B) was catastrophic.** Both strengths give 0% paper
+   despite very different TD-clean (0.05 vs 0.00). The reward landscape
+   became TTC-dominated and the policy never learned to navigate — it
+   just collides constantly. Need to revisit if pursued: clipping TTC
+   penalty, capping per-step magnitude, or training-time temperature
+   anneal on α_ttc.
+
+2. **FwdAmp (Lever C) helps marginally with strength.** γ=3 (29.5%)
+   beats γ=1 (26.2%). Both lose ~25 pp on Hard worlds especially.
+   The forward-cone amplification didn't translate to better
+   obstacle-handling in eval — probably because mndgrcil already
+   spent most of its training on forward-cone scenarios so the
+   amplification only changes magnitude, not behaviour learned.
+
+3. **Wait bonus (Lever D) has bizarre dose-response.**
+   - α=0.3 → 9.7%  (timeouts 179/600, drifts off path)
+   - α=1.0 → 42.3% (best of the 6, **zero collisions AND zero
+     timeouts in TD** — perfectly safe but indecisive in eval)
+   The low-strength wait creates a small distractor reward that
+   the policy chases instead of reaching goal. The high-strength
+   wait creates a "safety mode" that's risk-averse in eval too.
+   Neither beats the king's pure-go behaviour at rot=90.
+
+4. **All 6 regressed paper vs king.** Same pattern as Lever A and
+   the earlier hyperparam sweeps (β=15, a35, a45, σ_o=1.0, h256).
+   **King's reward shape is in a narrow attractor in policy-space**:
+   modifying it consistently destroys paper-eval transfer, even
+   for plausibly-helpful additions.
+
+**Conclusion:** Levers B/C/D are all dead. Reward-edit approach to
+"robot doesn't stop" is not working at the strengths swept. King's
+mndgrcil reward stays the baseline.
+
+**Possible directions remaining:**
+- Action-space change (add discrete "wait" / "back up" action)
+- Predictive obs (let policy see obstacle velocity directly,
+  not just position) — better information rather than better reward
+- LSTM/RNN policy (current is MinGRU — try plain LSTM, or no recur)
+- Training rotation randomization (so policy isn't anchored to +x→−x)
+- Best-bet: training with random rotation per-episode probably
+  closes the rot=0 vs rot=90 gap directly (75% → 55% gap is the
+  generality leak, not the "doesn't stop" problem).
+
+---
+
 ### `7itjyj5u` (group: `beta10_a45_obs8to30_speed05to5`) — mndgrcil + arena=45 — REGRESSED
 
 **Trained:** 2026-05-19, GPU 1, 500 M steps
